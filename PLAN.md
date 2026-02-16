@@ -2,183 +2,175 @@
 
 ## Context
 
-The TypeScript project at `/tmp/ms-365-mcp-server` is an MCP server exposing ~92 Microsoft Graph API endpoints as tools. We're porting it to .NET 10 as **Helix** (`/home/rawriclark/Projects/Helix`) using the official `ModelContextProtocol` C# SDK + `Microsoft.Graph` SDK v5. The goal is a multi-project solution that preserves all tool names and functionality from the source.
+Porting the TypeScript MCP server (`/tmp/ms-365-mcp-server`, ~92 Microsoft Graph tools) to .NET 10 as **Helix**. Using the official `ModelContextProtocol` C# SDK + `Microsoft.Graph` SDK v5. Multi-project solution, spec-compliant auth.
+
+**Key departure from source:** The source project's device-code-flow-as-MCP-tool is an anti-pattern per the MCP spec (2025-11-25). Helix follows the spec:
+- **Stdio:** credentials from environment (env vars / `appsettings.json`). A separate `helix login` CLI command (outside MCP) handles device code flow and stores tokens.
+- **HTTP:** Helix is an OAuth 2.1 Resource Server. Microsoft Entra ID is the Authorization Server. MCP client drives the OAuth flow, sends `Bearer` tokens.
+- **No `login`/`logout` MCP tools.** Auth is not a tool concern.
 
 ---
 
 ## Solution Structure
 
 ```
-Helix.sln
-├── global.json / Directory.Build.props / Directory.Packages.props
-├── src/
-│   ├── Helix.Core/          — Auth, GraphClient wrapper, config, helpers
-│   ├── Helix.Tools/         — All MCP tool classes (~20 files, one per service area)
-│   ├── Helix.Stdio/         — Console host (stdio transport)
-│   └── Helix.Http/          — ASP.NET Core host (HTTP/SSE transport)
-└── tests/
-    ├── Helix.Core.Tests/
-    └── Helix.Tools.Tests/
+Helix.slnx                          <- .NET 10 XML solution format
+global.json
+Directory.Build.props
+Directory.Packages.props
+src/
+  Helix.Core/                       <- Auth, Graph wrapper, config, helpers
+  Helix.Tools/                      <- All MCP tool classes
+  Helix.Stdio/                      <- Console host (stdio transport)
+  Helix.Http/                       <- ASP.NET Core host (HTTP transport)
+tests/
+  Helix.Core.Tests/
+  Helix.Tools.Tests/
 ```
 
 ---
 
-## Phase 1: Solution Scaffolding
+## Phase 1: Project + Auth + First Working Tool
 
-**Create:**
-- `Helix.sln`, `global.json`, `Directory.Build.props` (net10.0, nullable, implicit usings), `Directory.Packages.props` (central package management)
-- All 6 `.csproj` files with project references
-- Placeholder `Program.cs` for both hosts, `appsettings.json`
+Collapse scaffolding, auth, and first tool into one deliverable. At the end: a working MCP server with `get-current-user` responding over stdio.
 
-**NuGet packages:** `Microsoft.Graph`, `Azure.Identity`, `Microsoft.Identity.Client`, `Microsoft.Identity.Client.Extensions.Msal`, `ModelContextProtocol` (0.8.0-preview.1), `ModelContextProtocol.AspNetCore`, `Microsoft.Extensions.Hosting`, `xunit`, `Moq`
+### 1a. Solution scaffolding
 
-**Result:** `dotnet build` succeeds.
+**Create:** `Helix.slnx`, `global.json` (pin .NET 10), `Directory.Build.props` (net10.0, C# 14, nullable), `Directory.Packages.props` (CPM), all 6 `.csproj` files with references.
 
----
+**NuGet packages:**
+- `ModelContextProtocol` 0.8.0-preview.1, `ModelContextProtocol.AspNetCore`
+- `Microsoft.Graph` v5, `Azure.Identity`, `Microsoft.Identity.Client`, `Microsoft.Identity.Client.Extensions.Msal`
+- `Microsoft.Extensions.Hosting`
+- `xunit` v3, `Moq`
 
-## Phase 2: Authentication + GraphServiceClient
+### 1b. Auth -- spec-compliant
 
-**Create in `Helix.Core/`:**
-- `Configuration/HelixOptions.cs` — options class mapping `MS365_MCP_*` env vars
-- `Configuration/CloudConfiguration.cs` — global vs china endpoints (port of `src/cloud-config.ts`)
-- `Auth/IAuthManager.cs` — interface: `GetTokenAsync`, `AcquireTokenByDeviceCodeAsync`, `TestLoginAsync`, `LogoutAsync`, `ListAccountsAsync`, `SelectAccountAsync`, `RemoveAccountAsync`
-- `Auth/AuthManager.cs` — MSAL.NET `PublicClientApplication` with device code flow (port of `src/auth.ts`)
-- `Auth/TokenCacheHelper.cs` — persistent file cache via `Microsoft.Identity.Client.Extensions.Msal`
-- `Auth/HelixTokenCredential.cs` — bridges `IAuthManager` to `Azure.Core.TokenCredential`
-- `Auth/GraphClientFactory.cs` — creates `GraphServiceClient` using `HelixTokenCredential`
-- `Extensions/ServiceCollectionExtensions.cs` — `AddHelixCore()` DI registration
+**Stdio auth** -- credentials from environment:
+- `Helix.Core/Configuration/HelixOptions.cs` -- binds `Helix:*` config section (ClientId, TenantId, ClientSecret, CloudType, ReadOnly, OrgMode, EnabledToolsPattern)
+- `Helix.Core/Configuration/CloudConfiguration.cs` -- global vs china endpoints
+- `Helix.Core/Auth/TokenCredentialFactory.cs` -- creates the right `Azure.Identity` `TokenCredential` based on config:
+  - If access token provided via env var -> wrap in a static `AccessTokenCredential`
+  - If client secret -> `ClientSecretCredential`
+  - If cached token from `helix login` -> `DeviceCodeCredential` with cached token via MSAL Extensions
+- `Helix.Core/Auth/GraphClientFactory.cs` -- creates `GraphServiceClient` from credential + cloud endpoint
+- `Helix.Core/Extensions/ServiceCollectionExtensions.cs` -- `AddHelixCore()` DI wiring
 
-**Key source files to port from:**
-- `/tmp/ms-365-mcp-server/src/auth.ts` — device code flow, silent token, multi-account
-- `/tmp/ms-365-mcp-server/src/cloud-config.ts` — cloud endpoints
+**CLI login command** (separate from MCP):
+- `Helix.Stdio/Program.cs` handles `helix login` / `helix logout` as CLI subcommands (not MCP tools)
+- Triggers device code flow via MSAL, stores token in persistent cache (`Microsoft.Identity.Client.Extensions.Msal`)
+- `helix login` -> authenticate -> store token -> exit
+- `helix serve` (or no subcommand) -> start MCP server using cached/env credentials
 
-**Result:** Can authenticate via device code and call `graphClient.Me.GetAsync()`.
+**HTTP auth** (Phase 1 just stubs it, full implementation in Phase 3):
+- `Helix.Http/Program.cs` -- placeholder with `RequireAuthorization()` on `MapMcp()`
 
----
+### 1c. First tool + MCP server bootstrap
 
-## Phase 3: Auth Tools + MCP Server Bootstrap
+- `Helix.Core/Helpers/GraphResponseHelper.cs` -- format Graph responses, strip `@odata.*`
+- `Helix.Tools/Users/UserTools.cs` -- `get-current-user` tool
+- `Helix.Stdio/Program.cs` -- full stdio host: `AddMcpServer().WithStdioServerTransport().WithToolsFromAssembly()`
 
-**Create:**
-- `Helix.Tools/Auth/AuthTools.cs` — 6 tools: `login`, `logout`, `verify-login`, `list-accounts`, `select-account`, `remove-account` (port of `src/auth-tools.ts`)
-- `Helix.Stdio/Program.cs` — full stdio host: `AddMcpServer().WithStdioServerTransport().WithToolsFromAssembly()`
-- `Helix.Http/Program.cs` — full HTTP host: `AddMcpServer().WithHttpTransport()` + `app.MapMcp()`
-
-**Result:** Both transports start, MCP Inspector can connect, auth tools work.
-
----
-
-## Phase 4: Core Infrastructure + Users + Search (3 tools)
-
-**Create in `Helix.Core/`:**
-- `Helpers/GraphResponseHelper.cs` — format responses, strip `@odata.*` props (port of `graph-client.ts:formatJsonResponse`)
-- `Helpers/PaginationHelper.cs` — follow `@odata.nextLink` up to 100 pages (port of `graph-tools.ts` pagination logic)
-- `Helpers/ToolFilterService.cs` — read-only mode + regex tool filtering
-
-**Create in `Helix.Tools/`:**
-- `Users/UserTools.cs` — `get-current-user` (`Me.GetAsync()`), `list-users` (`Users.GetAsync()`)
-- `Search/SearchTools.cs` — `search-query` (`Search.Query.PostAsync()`)
-
-**All tools follow this pattern:**
-```csharp
-[McpServerToolType]
-public class UserTools(GraphServiceClient graphClient)
-{
-    [McpServerTool(Name = "get-current-user", ReadOnly = true),
-     Description("Get the currently authenticated user's profile")]
-    public async Task<string> GetCurrentUser() { ... }
-}
+### Result
+```bash
+helix login          # device code flow, caches token
+helix serve          # starts MCP stdio server
+# or with env var:
+HELIX_ACCESS_TOKEN=eyJ... helix serve
 ```
-
-**Result:** 3 tools work end-to-end with OData params, pagination, response formatting.
-
----
-
-## Phase 5: Mail (20 tools)
-
-**Create in `Helix.Tools/Mail/`:**
-- `MailTools.cs` — `list-mail-messages`, `list-mail-folders`, `list-mail-child-folders`, `list-mail-folder-messages`, `get-mail-message`, `send-mail`, `delete-mail-message`, `move-mail-message`, `update-mail-message`
-- `MailAttachmentTools.cs` — `list-mail-attachments`, `get-mail-attachment`, `add-mail-attachment`, `delete-mail-attachment`
-- `MailDraftTools.cs` — `create-draft-email`, `forward-mail-message`, `reply-mail-message`, `reply-all-mail-message`, `create-forward-draft`, `create-reply-draft`, `create-reply-all-draft`, `send-draft-message`
-- `SharedMailboxTools.cs` (org-mode) — `list-shared-mailbox-messages`, `list-shared-mailbox-folder-messages`, `get-shared-mailbox-message`, `send-shared-mailbox-mail`
-
-**Graph SDK calls:** `Me.Messages.GetAsync()`, `Me.SendMail.PostAsync()`, `Me.Messages[id].Reply.PostAsync()`, etc.
+MCP Inspector connects, calls `get-current-user`, gets back user profile.
 
 ---
 
-## Phase 6: Calendar (15 tools)
+## Phase 2: Core Infrastructure + Users + Search
 
-**Create in `Helix.Tools/Calendar/`:**
-- `CalendarTools.cs` — all event CRUD, calendar views, instances, calendars list (14 tools)
-- `MeetingTools.cs` (org-mode) — `find-meeting-times`
+Build the shared tool infrastructure, then port the simplest services.
 
-**Special handling:** timezone via `Prefer: outlook.timezone="..."` header, `expandExtendedProperties` via `$expand=singleValueExtendedProperties`, `calendarView` requires `startDateTime`+`endDateTime`.
+- `Helix.Core/Helpers/PaginationHelper.cs` -- follow `@odata.nextLink` up to 100 pages
+- `Helix.Core/Helpers/ToolFilterService.cs` -- read-only mode + regex tool filtering
+- `Helix.Tools/Users/UserTools.cs` -- add `list-users` (org-mode only)
+- `Helix.Tools/Search/SearchTools.cs` -- `search-query`
 
----
-
-## Phase 7: Files + Excel + OneNote (18 tools)
-
-**Create in `Helix.Tools/`:**
-- `Files/FileTools.cs` — 7 tools: drives, folders, download (via `@microsoft.graph.downloadUrl`), upload, delete
-- `Excel/ExcelTools.cs` — 5 tools: worksheets, ranges, charts, format, sort
-- `OneNote/OneNoteTools.cs` — 6 tools: notebooks, sections, pages (create uses `text/html`)
+**Result:** 3 tools work with OData params, pagination, response formatting, read-only filtering.
 
 ---
 
-## Phase 8: To Do + Planner + Contacts (18 tools)
+## Phase 3: HTTP Transport with OAuth 2.1
 
-**Create in `Helix.Tools/`:**
-- `Todo/TodoTools.cs` — 6 tools: task lists and tasks CRUD
-- `Planner/PlannerTools.cs` — 7 tools: plans, tasks, task details (updates need `If-Match` ETag header)
-- `Contacts/ContactTools.cs` — 5 tools: contacts CRUD
+Full spec-compliant HTTP transport:
 
----
+- `Helix.Http/Program.cs`:
+  - `AddAuthentication()` with dual scheme: `McpAuthenticationDefaults` (challenge) + `JwtBearer` (validation)
+  - `ResourceMetadata` pointing to Microsoft Entra ID as Authorization Server
+  - `UseAuthentication()` + `UseAuthorization()` + `MapMcp().RequireAuthorization()`
+  - Extract user identity from JWT claims, create per-request `GraphServiceClient` with on-behalf-of flow or token exchange
 
-## Phase 9: Teams + SharePoint + Groups (33 tools, org-mode only)
-
-**Create in `Helix.Tools/`:**
-- `Teams/TeamTools.cs` — teams, channels, members (6 tools)
-- `Teams/ChatTools.cs` — chats and messages (7 tools)
-- `Teams/ChannelMessageTools.cs` — channel messages and replies (5 tools)
-- `SharePoint/SharePointTools.cs` — sites, drives, lists, items (12 tools)
-- `Groups/GroupTools.cs` — conversations, threads, replies (3 tools)
-
-**Conditional registration:** only when `HelixOptions.OrgMode == true`.
+**Result:** HTTP transport works with proper OAuth 2.1 flow. MCP client authenticates via Entra ID, Helix validates Bearer token.
 
 ---
 
-## Phase 10: Discovery Mode + CLI + Tests
+## Phase 4: Mail (20 tools)
 
-**Create:**
-- `Helix.Tools/Discovery/DiscoveryTools.cs` — `search-tools` + `execute-tool` meta-tools
-- `Helix.Core/Configuration/ToolCategories.cs` — category presets (port of `src/tool-categories.ts`)
-- Full CLI arg parsing: `--read-only`, `--org-mode`, `--preset`, `--enabled-tools`, `--discovery`, `--cloud`, `-v`
-- Unit tests for auth, response formatting, tool filtering, and each tool class
+- `Helix.Tools/Mail/MailTools.cs` -- list, get, send, delete, move, update messages + folders
+- `Helix.Tools/Mail/MailAttachmentTools.cs` -- CRUD attachments
+- `Helix.Tools/Mail/MailDraftTools.cs` -- drafts, reply, forward
+- `Helix.Tools/Mail/SharedMailboxTools.cs` -- shared mailbox ops (org-mode)
+
+---
+
+## Phase 5: Calendar (15 tools)
+
+- `Helix.Tools/Calendar/CalendarTools.cs` -- event CRUD, views, instances, calendars
+- `Helix.Tools/Calendar/MeetingTools.cs` -- find-meeting-times (org-mode)
+
+Timezone via `Prefer: outlook.timezone="..."`, extended properties via `$expand`.
+
+---
+
+## Phase 6: Files + Excel + OneNote (18 tools)
+
+- `Helix.Tools/Files/FileTools.cs` -- drives, folders, download, upload, delete
+- `Helix.Tools/Excel/ExcelTools.cs` -- worksheets, ranges, charts, format, sort
+- `Helix.Tools/OneNote/OneNoteTools.cs` -- notebooks, sections, pages
+
+---
+
+## Phase 7: To Do + Planner + Contacts (18 tools)
+
+- `Helix.Tools/Todo/TodoTools.cs` -- task lists + tasks CRUD
+- `Helix.Tools/Planner/PlannerTools.cs` -- plans, tasks, task details (ETag headers)
+- `Helix.Tools/Contacts/ContactTools.cs` -- contacts CRUD
+
+---
+
+## Phase 8: Teams + SharePoint + Groups (33 tools, org-mode)
+
+- `Helix.Tools/Teams/TeamTools.cs`, `ChatTools.cs`, `ChannelMessageTools.cs`
+- `Helix.Tools/SharePoint/SharePointTools.cs`
+- `Helix.Tools/Groups/GroupTools.cs`
+
+Conditional registration: only when `OrgMode == true`.
+
+---
+
+## Phase 9: Discovery Mode + CLI Polish + Tests
+
+- `Helix.Tools/Discovery/DiscoveryTools.cs` -- `search-tools` + `execute-tool`
+- `Helix.Core/Configuration/ToolCategories.cs` -- category presets
+- CLI args: `--read-only`, `--org-mode`, `--preset`, `--enabled-tools`, `--discovery`, `--cloud`, `-v`
+- Unit tests for all tool classes, auth, helpers
 
 ---
 
 ## Verification
 
-1. `dotnet build` — all projects compile
-2. `dotnet run --project src/Helix.Stdio -- --login` — device code flow works
-3. Connect MCP Inspector to stdio transport — all tools listed
-4. Invoke `get-current-user` — returns user profile
-5. Invoke `list-mail-messages` with `top=5` — returns messages
-6. Run `dotnet test` — all tests pass
-7. Test HTTP transport: `dotnet run --project src/Helix.Http` + connect via MCP Inspector
-8. Test `--read-only` — write tools return error
-9. Test `--org-mode` — Teams/SharePoint tools appear
-10. Test `--discovery` — only `search-tools` and `execute-tool` registered
-
----
-
-## Key Source Files Reference
-
-| Source file | What to port |
-|---|---|
-| `/tmp/ms-365-mcp-server/src/endpoints.json` | Tool names, descriptions, scopes, llmTips |
-| `/tmp/ms-365-mcp-server/src/auth.ts` | Device code flow, token cache, multi-account |
-| `/tmp/ms-365-mcp-server/src/graph-tools.ts` | Tool registration, OData params, pagination, response formatting |
-| `/tmp/ms-365-mcp-server/src/graph-client.ts` | Response formatting, OData stripping, error handling |
-| `/tmp/ms-365-mcp-server/src/tool-categories.ts` | Category presets and patterns |
-| `/tmp/ms-365-mcp-server/src/cloud-config.ts` | Cloud endpoints (global/china) |
-| `/tmp/ms-365-mcp-server/src/auth-tools.ts` | Auth tool implementations |
+1. `dotnet build` -- compiles
+2. `helix login` -- device code flow works, token cached
+3. `helix serve` -- starts stdio server
+4. MCP Inspector -> `get-current-user` -> returns profile
+5. `list-mail-messages` with `top=5` -> returns messages
+6. `dotnet test` -- passes
+7. HTTP transport with Bearer token -> tools work
+8. `--read-only` -> write tools blocked
+9. `--org-mode` -> Teams/SharePoint tools appear
+10. `--discovery` -- only search-tools + execute-tool registered
