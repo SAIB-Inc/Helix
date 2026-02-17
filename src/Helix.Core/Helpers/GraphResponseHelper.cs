@@ -29,6 +29,14 @@ public static class GraphResponseHelper
     }
 
     /// <summary>
+    /// Formats a validation error into a JSON error response.
+    /// </summary>
+    public static string FormatError(string message)
+    {
+        return JsonSerializer.Serialize(new { error = true, code = "ValidationError", message }, SerializerOptions);
+    }
+
+    /// <summary>
     /// Formats a Graph API response by serializing to JSON and stripping OData metadata properties.
     /// </summary>
     public static string FormatResponse(object? data)

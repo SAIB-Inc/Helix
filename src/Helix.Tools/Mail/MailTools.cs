@@ -2,6 +2,7 @@ using System.ComponentModel;
 using Helix.Core.Helpers;
 using Microsoft.Graph;
 using Microsoft.Graph.Me.Messages.Item.Move;
+using Microsoft.Graph.Me.Messages.Item.Send;
 using Microsoft.Graph.Me.SendMail;
 using Microsoft.Graph.Models;
 using Microsoft.Graph.Models.ODataErrors;
@@ -82,7 +83,9 @@ public class MailTools(GraphServiceClient graphClient)
         [Description("Comma-separated 'CC' recipient email addresses.")] string? ccRecipients = null,
         [Description("Comma-separated 'BCC' recipient email addresses.")] string? bccRecipients = null,
         [Description("Message importance: low, normal, or high (default: normal).")] string? importance = null,
-        [Description("Body content type: text or html (default: text).")] string? bodyContentType = null)
+        [Description("Body content type: text or html (default: text).")] string? bodyContentType = null,
+        [Description("Comma-separated absolute file paths to attach, e.g. '/tmp/report.pdf,/tmp/image.png'.")] string? attachmentFilePaths = null,
+        [Description("Comma-separated MIME types matching each attachment, e.g. 'application/pdf,image/png'.")] string? attachmentContentTypes = null)
     {
         try
         {
@@ -108,10 +111,45 @@ public class MailTools(GraphServiceClient graphClient)
             if (!string.IsNullOrWhiteSpace(importance))
                 message.Importance = ParseImportance(importance);
 
-            await graphClient.Me.SendMail.PostAsync(new SendMailPostRequestBody
+            if (!string.IsNullOrWhiteSpace(attachmentFilePaths))
             {
-                Message = message
-            }).ConfigureAwait(false);
+                var paths = attachmentFilePaths.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                var types = attachmentContentTypes?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) ?? [];
+
+                if (types.Length > 0 && types.Length != paths.Length)
+                    return GraphResponseHelper.FormatError("attachmentContentTypes count must match attachmentFilePaths count.");
+
+                foreach (var path in paths)
+                {
+                    if (!File.Exists(path))
+                        return GraphResponseHelper.FormatError($"File not found: {path}");
+                }
+
+                // Create draft, attach files, then send
+                var draft = await graphClient.Me.Messages.PostAsync(message).ConfigureAwait(false);
+
+                for (var i = 0; i < paths.Length; i++)
+                {
+                    var fileBytes = await File.ReadAllBytesAsync(paths[i]).ConfigureAwait(false);
+                    var attachment = new FileAttachment
+                    {
+                        OdataType = "#microsoft.graph.fileAttachment",
+                        Name = Path.GetFileName(paths[i]),
+                        ContentType = types.Length > 0 ? types[i] : "application/octet-stream",
+                        ContentBytes = fileBytes
+                    };
+                    await graphClient.Me.Messages[draft!.Id].Attachments.PostAsync(attachment).ConfigureAwait(false);
+                }
+
+                await graphClient.Me.Messages[draft!.Id].Send.PostAsync(null).ConfigureAwait(false);
+            }
+            else
+            {
+                await graphClient.Me.SendMail.PostAsync(new SendMailPostRequestBody
+                {
+                    Message = message
+                }).ConfigureAwait(false);
+            }
 
             return GraphResponseHelper.FormatResponse(null);
         }
@@ -190,7 +228,7 @@ public class MailTools(GraphServiceClient graphClient)
         }
     }
 
-    private static List<Recipient> ParseRecipients(string? recipientList)
+    internal static List<Recipient> ParseRecipients(string? recipientList)
     {
         if (string.IsNullOrWhiteSpace(recipientList))
             return [];
@@ -203,7 +241,7 @@ public class MailTools(GraphServiceClient graphClient)
             })];
     }
 
-    private static Importance? ParseImportance(string? value)
+    internal static Importance? ParseImportance(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
             return null;
@@ -217,7 +255,7 @@ public class MailTools(GraphServiceClient graphClient)
         };
     }
 
-    private static BodyType ParseBodyContentType(string? value)
+    internal static BodyType ParseBodyContentType(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
             return BodyType.Text;
