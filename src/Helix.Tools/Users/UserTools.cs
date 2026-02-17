@@ -8,13 +8,11 @@ namespace Helix.Tools.Users;
 [McpServerToolType]
 public class UserTools(GraphServiceClient graphClient)
 {
-    private readonly GraphServiceClient _graphClient = graphClient;
-
     [McpServerTool(Name = "get-current-user", ReadOnly = true),
      Description("Get the currently authenticated user's profile from Microsoft 365.")]
     public async Task<string> GetCurrentUser()
     {
-        var user = await _graphClient.Me.GetAsync();
+        var user = await graphClient.Me.GetAsync().ConfigureAwait(false);
         return GraphResponseHelper.FormatResponse(user);
     }
 }

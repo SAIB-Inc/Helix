@@ -36,7 +36,7 @@ public static class GraphResponseHelper
             }
             return json;
         }
-        catch
+        catch (JsonException)
         {
             return json;
         }

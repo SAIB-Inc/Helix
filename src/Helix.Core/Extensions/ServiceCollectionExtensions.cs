@@ -2,7 +2,6 @@ using Helix.Core.Auth;
 using Helix.Core.Configuration;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Graph;
 using Microsoft.Identity.Client;
 
 namespace Helix.Core.Extensions;
@@ -13,6 +12,8 @@ public static class ServiceCollectionExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        ArgumentNullException.ThrowIfNull(configuration);
+
         services.Configure<HelixOptions>(configuration.GetSection(HelixOptions.SectionName));
 
         var options = new HelixOptions();

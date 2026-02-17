@@ -10,14 +10,16 @@ public static class MsalClientFactory
 {
     public static async Task<IPublicClientApplication> CreateAsync(HelixOptions options)
     {
-        var authority = CloudConfiguration.GetAuthority(options.CloudType, options.TenantId);
+        ArgumentNullException.ThrowIfNull(options);
+
+        var authority = new Uri(CloudConfiguration.GetAuthority(options.CloudType, options.TenantId));
 
         var app = PublicClientApplicationBuilder
             .Create(options.ClientId)
             .WithAuthority(authority)
             .Build();
 
-        await TokenCacheHelper.RegisterCacheAsync(app);
+        await TokenCacheHelper.RegisterCacheAsync(app).ConfigureAwait(false);
 
         return app;
     }

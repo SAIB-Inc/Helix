@@ -13,6 +13,8 @@ public static class TokenCacheHelper
 
     public static async Task RegisterCacheAsync(IPublicClientApplication app)
     {
+        ArgumentNullException.ThrowIfNull(app);
+
         var builder = new StorageCreationPropertiesBuilder(CacheFileName, CacheDirectory);
 
         // Linux requires keyring configuration for encrypted storage
@@ -37,17 +39,17 @@ public static class TokenCacheHelper
         MsalCacheHelper cacheHelper;
         try
         {
-            cacheHelper = await MsalCacheHelper.CreateAsync(storageProperties);
+            cacheHelper = await MsalCacheHelper.CreateAsync(storageProperties).ConfigureAwait(false);
             cacheHelper.VerifyPersistence();
         }
-        catch
+        catch (MsalCachePersistenceException)
         {
             // If keyring/keychain isn't available, fall back to plain file
             var fallbackProperties = new StorageCreationPropertiesBuilder(CacheFileName, CacheDirectory)
                 .WithLinuxUnprotectedFile()
                 .Build();
 
-            cacheHelper = await MsalCacheHelper.CreateAsync(fallbackProperties);
+            cacheHelper = await MsalCacheHelper.CreateAsync(fallbackProperties).ConfigureAwait(false);
         }
 
         cacheHelper.RegisterCache(app.UserTokenCache);

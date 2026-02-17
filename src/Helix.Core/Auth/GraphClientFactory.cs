@@ -10,14 +10,11 @@ namespace Helix.Core.Auth;
 /// </summary>
 public class HelixGraphClientFactory(HelixOptions options, IPublicClientApplication? msalApp = null)
 {
-    private readonly HelixOptions _options = options;
-    private readonly IPublicClientApplication? _msalApp = msalApp;
-
     public GraphServiceClient Create()
     {
         var credential = CreateCredential();
-        var graphEndpoint = CloudConfiguration.GetGraphEndpoint(_options.CloudType);
-        var scopes = CloudConfiguration.GetGraphScopes(_options.CloudType);
+        var graphEndpoint = CloudConfiguration.GetGraphEndpoint(options.CloudType);
+        var scopes = CloudConfiguration.GetGraphScopes(options.CloudType);
 
         return new GraphServiceClient(credential, scopes, graphEndpoint);
     }
@@ -25,21 +22,21 @@ public class HelixGraphClientFactory(HelixOptions options, IPublicClientApplicat
     private TokenCredential CreateCredential()
     {
         // Priority 1: Static access token from env var
-        if (!string.IsNullOrEmpty(_options.AccessToken))
-            return new StaticTokenCredential(_options.AccessToken);
+        if (!string.IsNullOrEmpty(options.AccessToken))
+            return new StaticTokenCredential(options.AccessToken);
 
         // Priority 2: Client credentials (app-only, no user context)
-        if (!string.IsNullOrEmpty(_options.ClientSecret))
+        if (!string.IsNullOrEmpty(options.ClientSecret))
             return new Azure.Identity.ClientSecretCredential(
-                _options.TenantId,
-                _options.ClientId,
-                _options.ClientSecret);
+                options.TenantId,
+                options.ClientId,
+                options.ClientSecret);
 
         // Priority 3: MSAL cached token (from 'helix login')
-        if (_msalApp is not null)
+        if (msalApp is not null)
         {
-            var scopes = CloudConfiguration.GetGraphScopes(_options.CloudType);
-            return new HelixTokenCredential(_msalApp, scopes);
+            var scopes = CloudConfiguration.GetGraphScopes(options.CloudType);
+            return new HelixTokenCredential(msalApp, scopes);
         }
 
         throw new InvalidOperationException(

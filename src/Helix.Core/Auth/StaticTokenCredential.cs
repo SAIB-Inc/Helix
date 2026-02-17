@@ -5,22 +5,15 @@ namespace Helix.Core.Auth;
 /// <summary>
 /// A TokenCredential that returns a static access token provided via environment variable.
 /// </summary>
-public class StaticTokenCredential : TokenCredential
+public class StaticTokenCredential(string accessToken) : TokenCredential
 {
-    private readonly string _accessToken;
-
-    public StaticTokenCredential(string accessToken)
-    {
-        _accessToken = accessToken;
-    }
-
     public override AccessToken GetToken(TokenRequestContext requestContext, CancellationToken cancellationToken)
     {
-        return new AccessToken(_accessToken, DateTimeOffset.UtcNow.AddHours(1));
+        return new AccessToken(accessToken, DateTimeOffset.UtcNow.AddHours(1));
     }
 
     public override ValueTask<AccessToken> GetTokenAsync(TokenRequestContext requestContext, CancellationToken cancellationToken)
     {
-        return ValueTask.FromResult(new AccessToken(_accessToken, DateTimeOffset.UtcNow.AddHours(1)));
+        return ValueTask.FromResult(new AccessToken(accessToken, DateTimeOffset.UtcNow.AddHours(1)));
     }
 }
