@@ -27,6 +27,23 @@ public static class TokenCacheHelper
         app.UserTokenCache.SetAfterAccessAsync(AfterAccessAsync);
     }
 
+    /// <summary>
+    /// Deletes the token cache file from disk. Called during logout to ensure
+    /// stale tokens with old scopes are fully cleared.
+    /// </summary>
+    public static void ClearCache()
+    {
+        try
+        {
+            if (File.Exists(CacheFilePath))
+                File.Delete(CacheFilePath);
+        }
+        catch (IOException)
+        {
+            // Best effort
+        }
+    }
+
     private static async Task BeforeAccessAsync(TokenCacheNotificationArgs args)
     {
         await SyncLock.WaitAsync().ConfigureAwait(false);
