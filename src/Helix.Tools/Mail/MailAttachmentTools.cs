@@ -55,8 +55,11 @@ public class MailAttachmentTools(GraphServiceClient graphClient)
                 fileAttachment.ContentBytes = null;
                 var metadata = GraphResponseHelper.FormatResponse(fileAttachment);
 
+                var sizeBytes = new FileInfo(filePath).Length;
+                var sizeDisplay = sizeBytes < 1024 ? $"{sizeBytes} bytes" : $"{sizeBytes / 1024} KB";
+
                 return $"Attachment saved to: {filePath}\n"
-                    + $"Size: {new FileInfo(filePath).Length / 1024} KB\n\n"
+                    + $"Size: {sizeDisplay}\n\n"
                     + $"Metadata:\n{metadata}";
             }
 
