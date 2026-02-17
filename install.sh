@@ -11,6 +11,7 @@ set -euo pipefail
 REPO="SAIB-Inc/Helix"
 INSTALL_DIR="${HELIX_INSTALL_DIR:-$HOME/.helix/bin}"
 BINARY_NAME="helix"
+TMP_DIR=""
 
 # --- Helpers ---
 
@@ -89,19 +90,18 @@ resolve_version() {
 install() {
     local asset_name="helix-${RID}.tar.gz"
     local download_url="https://github.com/${REPO}/releases/download/${VERSION}/${asset_name}"
-    local tmp_dir
 
-    tmp_dir="$(mktemp -d)"
-    trap 'rm -rf "$tmp_dir"' EXIT
+    TMP_DIR="$(mktemp -d)"
+    trap 'rm -rf "$TMP_DIR"' EXIT
 
     info "Downloading Helix ${VERSION} for ${RID}..."
-    fetch_to_file "$download_url" "${tmp_dir}/${asset_name}"
+    fetch_to_file "$download_url" "${TMP_DIR}/${asset_name}"
 
     info "Extracting..."
-    tar -xzf "${tmp_dir}/${asset_name}" -C "$tmp_dir"
+    tar -xzf "${TMP_DIR}/${asset_name}" -C "$TMP_DIR"
 
     mkdir -p "$INSTALL_DIR"
-    mv "${tmp_dir}/${BINARY_NAME}" "${INSTALL_DIR}/${BINARY_NAME}"
+    mv "${TMP_DIR}/${BINARY_NAME}" "${INSTALL_DIR}/${BINARY_NAME}"
     chmod +x "${INSTALL_DIR}/${BINARY_NAME}"
 
     # macOS: remove quarantine attribute to avoid Gatekeeper prompt
@@ -119,9 +119,28 @@ configure_path() {
         *:"${INSTALL_DIR}":*) return ;;
     esac
 
-    local shell_name profile_file
+    # Detect the user's actual login shell. When piped into bash via
+    # 'curl | bash', $SHELL still reflects the user's real login shell.
+    local shell_name
     shell_name="$(basename "${SHELL:-/bin/bash}")"
 
+    # Fish uses a different config path and syntax
+    if [ "$shell_name" = "fish" ]; then
+        local fish_config="$HOME/.config/fish/conf.d/helix.fish"
+        mkdir -p "$(dirname "$fish_config")"
+        if [ -f "$fish_config" ] && grep -qF "$INSTALL_DIR" "$fish_config" 2>/dev/null; then
+            return
+        fi
+        printf '# Helix MCP Server\nfish_add_path %s\n' "$INSTALL_DIR" > "$fish_config"
+        info "Added ${INSTALL_DIR} to PATH in ${fish_config}"
+        info ""
+        info "Restart your shell or run:"
+        info "  fish_add_path ${INSTALL_DIR}"
+        return
+    fi
+
+    # POSIX shells: zsh, bash, etc.
+    local profile_file
     case "$shell_name" in
         zsh)  profile_file="$HOME/.zshrc" ;;
         bash)
