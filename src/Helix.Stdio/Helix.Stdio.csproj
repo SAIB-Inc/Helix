@@ -18,6 +18,8 @@
   <ItemGroup Condition="'$(PublishTrimmed)' == 'true'">
     <TrimmerRootAssembly Include="Helix.Tools" />
     <TrimmerRootAssembly Include="Helix.Core" />
+    <TrimmerRootAssembly Include="Microsoft.Identity.Client" />
+    <TrimmerRootAssembly Include="Microsoft.Identity.Client.Extensions.Msal" />
   </ItemGroup>
 
   <ItemGroup>
