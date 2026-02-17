@@ -51,6 +51,46 @@ test(calendar): add unit tests for calendar tools
 build: add Microsoft.Graph NuGet package
 ```
 
+## Design Principles
+
+These principles apply to all MCP tool implementations in Helix.
+
+### 1. Files go through the filesystem, never through the context
+
+Large binary content (attachments, documents, images) must **never** be passed inline as tool parameters or return values. This consumes LLM context and can exceed token limits.
+
+- **Downloading:** Save files to disk (e.g. `/tmp/helix-attachments/`), return the file path.
+- **Uploading:** Accept a file path on disk, read the bytes internally.
+- **Never** accept or return base64-encoded file content as a tool parameter.
+
+### 2. Lean responses by default
+
+Tool responses must stay small enough for LLM context windows.
+
+- **List operations:** Use a default `$select` with only essential fields (id, subject, from, date, preview). Never return full HTML bodies by default.
+- **Mutations:** Return `{ "success": true }` — not the full mutated object.
+- **Errors:** Return structured `{ "error": true, "code": "...", "message": "..." }` — not stack traces.
+- **Enums:** Serialize as camelCase strings (`"normal"`), not integers (`1`).
+
+### 3. Descriptive tool metadata
+
+Tool descriptions guide the LLM agent. They must be accurate and actionable.
+
+- Document required formats (e.g. KQL search must be double-quoted).
+- Warn about dangerous assumptions (e.g. "Never guess email addresses").
+- Reference related tools (e.g. "Use 'list-mail-folders' to get folder IDs").
+- Mark read-only tools with `ReadOnly = true`.
+
+### 4. Graceful error handling
+
+All Graph API tools must catch `ODataError` and return meaningful error messages instead of letting exceptions propagate as generic "An error occurred" messages.
+
+### 5. Thread safety for shared state
+
+The MCP SDK creates new tool instances per invocation. Any state shared across invocations (e.g. `LoginSession`) must use static fields with proper synchronization (e.g. `Lock`) to support both stdio and HTTP transports.
+
+---
+
 ## Merging
 
 - **Always squash merge** PRs into `main`.
