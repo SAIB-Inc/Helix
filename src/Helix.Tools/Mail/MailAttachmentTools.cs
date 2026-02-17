@@ -55,22 +55,14 @@ public class MailAttachmentTools(GraphServiceClient graphClient)
                 if (returnBase64 == true)
                 {
                     var base64 = Convert.ToBase64String(fileAttachment.ContentBytes);
-                    fileAttachment.ContentBytes = null;
-                    var metadata = GraphResponseHelper.FormatResponse(fileAttachment);
-
-                    var metaText = new TextContentBlock
-                    {
-                        Text = $"Name: {safeName}\nSize: {sizeDisplay}\nMimeType: {mimeType}\n\nMetadata:\n{metadata}"
-                    };
 
                     if (mimeType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
                     {
-                        return [metaText, new ImageContentBlock { Data = base64, MimeType = mimeType }];
+                        return [new ImageContentBlock { Data = base64, MimeType = mimeType }];
                     }
 
                     return
                     [
-                        metaText,
                         new EmbeddedResourceBlock
                         {
                             Resource = new BlobResourceContents

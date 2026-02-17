@@ -209,24 +209,15 @@ public class SharePointFileTools(GraphServiceClient graphClient)
             if (returnBase64 == true)
             {
                 var base64 = Convert.ToBase64String(bytes);
-                var sizeDisplay = bytes.Length < 1024 ? $"{bytes.Length} bytes" : $"{bytes.Length / 1024} KB";
                 var mimeType = item.File?.MimeType ?? "application/octet-stream";
 
-                var metaText = new TextContentBlock
-                {
-                    Text = $"Name: {item.Name}\nSize: {sizeDisplay}\nMimeType: {mimeType}"
-                };
-
-                // Return images as ImageContentBlock for proper MCP client handling
                 if (mimeType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
                 {
-                    return [metaText, new ImageContentBlock { Data = base64, MimeType = mimeType }];
+                    return [new ImageContentBlock { Data = base64, MimeType = mimeType }];
                 }
 
-                // Return other files as EmbeddedResourceBlock with blob data
                 return
                 [
-                    metaText,
                     new EmbeddedResourceBlock
                     {
                         Resource = new BlobResourceContents
