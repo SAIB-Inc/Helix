@@ -85,7 +85,9 @@ public class MailTools(GraphServiceClient graphClient)
         [Description("Message importance: low, normal, or high (default: normal).")] string? importance = null,
         [Description("Body content type: text or html (default: text).")] string? bodyContentType = null,
         [Description("Comma-separated absolute file paths to attach, e.g. '/tmp/report.pdf,/tmp/image.png'.")] string? attachmentFilePaths = null,
-        [Description("Comma-separated MIME types matching each attachment, e.g. 'application/pdf,image/png'.")] string? attachmentContentTypes = null)
+        [Description("Comma-separated MIME types matching each attachment, e.g. 'application/pdf,image/png'.")] string? attachmentContentTypes = null,
+        [Description("Comma-separated base64-encoded file contents. Use instead of attachmentFilePaths when files are not on the host filesystem.")] string? attachmentBase64Contents = null,
+        [Description("Comma-separated file names matching each base64 attachment, e.g. 'report.pdf,image.png'.")] string? attachmentFileNames = null)
     {
         try
         {
@@ -111,34 +113,69 @@ public class MailTools(GraphServiceClient graphClient)
             if (!string.IsNullOrWhiteSpace(importance))
                 message.Importance = ParseImportance(importance);
 
-            if (!string.IsNullOrWhiteSpace(attachmentFilePaths))
+            var hasFilePaths = !string.IsNullOrWhiteSpace(attachmentFilePaths);
+            var hasBase64 = !string.IsNullOrWhiteSpace(attachmentBase64Contents);
+
+            if (hasFilePaths || hasBase64)
             {
-                var paths = attachmentFilePaths.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                var types = attachmentContentTypes?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) ?? [];
-
-                if (types.Length > 0 && types.Length != paths.Length)
-                    return GraphResponseHelper.FormatError("attachmentContentTypes count must match attachmentFilePaths count.");
-
-                foreach (var path in paths)
-                {
-                    if (!File.Exists(path))
-                        return GraphResponseHelper.FormatError($"File not found: {path}");
-                }
-
-                // Create draft, attach files, then send
+                // Create draft first, then attach, then send
                 var draft = await graphClient.Me.Messages.PostAsync(message).ConfigureAwait(false);
 
-                for (var i = 0; i < paths.Length; i++)
+                if (hasFilePaths)
                 {
-                    var fileBytes = await File.ReadAllBytesAsync(paths[i]).ConfigureAwait(false);
-                    var attachment = new FileAttachment
+                    var paths = attachmentFilePaths!.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                    var types = attachmentContentTypes?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) ?? [];
+
+                    if (types.Length > 0 && types.Length != paths.Length)
+                        return GraphResponseHelper.FormatError("attachmentContentTypes count must match attachmentFilePaths count.");
+
+                    foreach (var path in paths)
                     {
-                        OdataType = "#microsoft.graph.fileAttachment",
-                        Name = Path.GetFileName(paths[i]),
-                        ContentType = types.Length > 0 ? types[i] : "application/octet-stream",
-                        ContentBytes = fileBytes
-                    };
-                    await graphClient.Me.Messages[draft!.Id].Attachments.PostAsync(attachment).ConfigureAwait(false);
+                        if (!File.Exists(path))
+                            return GraphResponseHelper.FormatError($"File not found: {path}");
+                    }
+
+                    for (var i = 0; i < paths.Length; i++)
+                    {
+                        var fileBytes = await File.ReadAllBytesAsync(paths[i]).ConfigureAwait(false);
+                        var attachment = new FileAttachment
+                        {
+                            OdataType = "#microsoft.graph.fileAttachment",
+                            Name = Path.GetFileName(paths[i]),
+                            ContentType = types.Length > 0 ? types[i] : "application/octet-stream",
+                            ContentBytes = fileBytes
+                        };
+                        await graphClient.Me.Messages[draft!.Id].Attachments.PostAsync(attachment).ConfigureAwait(false);
+                    }
+                }
+
+                if (hasBase64)
+                {
+                    var b64Items = attachmentBase64Contents!.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                    var names = attachmentFileNames?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) ?? [];
+                    var types = attachmentContentTypes?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) ?? [];
+
+                    for (var i = 0; i < b64Items.Length; i++)
+                    {
+                        byte[] fileBytes;
+                        try
+                        {
+                            fileBytes = Convert.FromBase64String(b64Items[i]);
+                        }
+                        catch (FormatException)
+                        {
+                            return GraphResponseHelper.FormatError($"Invalid base64 content at position {i}.");
+                        }
+
+                        var attachment = new FileAttachment
+                        {
+                            OdataType = "#microsoft.graph.fileAttachment",
+                            Name = names.Length > i ? names[i] : $"attachment-{i}",
+                            ContentType = types.Length > i ? types[i] : "application/octet-stream",
+                            ContentBytes = fileBytes
+                        };
+                        await graphClient.Me.Messages[draft!.Id].Attachments.PostAsync(attachment).ConfigureAwait(false);
+                    }
                 }
 
                 await graphClient.Me.Messages[draft!.Id].Send.PostAsync(null).ConfigureAwait(false);

@@ -73,24 +73,50 @@ public class MailAttachmentTools(GraphServiceClient graphClient)
 
     [McpServerTool(Name = "add-mail-attachment"),
      Description("Add a file attachment to a mail message (typically a draft). "
-        + "Reads the file from the given path on disk — do NOT pass file content inline.")]
+        + "Reads the file from the given path on disk — do NOT pass file content inline. "
+        + "Alternatively, pass file content as base64 with contentBase64 and fileName instead of filePath "
+        + "(useful when the caller cannot access the host filesystem).")]
     public async Task<string> AddMailAttachment(
         [Description("The unique identifier of the message to attach the file to.")] string messageId,
-        [Description("Absolute path to the file on disk, e.g. '/tmp/report.pdf'.")] string filePath,
-        [Description("MIME type, e.g. 'application/pdf', 'image/png', 'text/plain'.")] string contentType)
+        [Description("MIME type, e.g. 'application/pdf', 'image/png', 'text/plain'.")] string contentType,
+        [Description("Absolute path to the file on disk, e.g. '/tmp/report.pdf'.")] string? filePath = null,
+        [Description("Base64-encoded file content. Use this instead of filePath when the file is not on the host filesystem.")] string? contentBase64 = null,
+        [Description("File name for the attachment (required when using contentBase64), e.g. 'report.pdf'.")] string? fileName = null)
     {
         try
         {
-            if (!File.Exists(filePath))
-                return $"File not found: {filePath}";
+            byte[] fileBytes;
+            string attachmentName;
 
-            var fileBytes = await File.ReadAllBytesAsync(filePath).ConfigureAwait(false);
-            var fileName = Path.GetFileName(filePath);
+            if (!string.IsNullOrWhiteSpace(contentBase64))
+            {
+                try
+                {
+                    fileBytes = Convert.FromBase64String(contentBase64);
+                }
+                catch (FormatException)
+                {
+                    return GraphResponseHelper.FormatError("Invalid base64 content in 'contentBase64' parameter.");
+                }
+                attachmentName = !string.IsNullOrWhiteSpace(fileName) ? fileName : "attachment";
+            }
+            else if (!string.IsNullOrWhiteSpace(filePath))
+            {
+                if (!File.Exists(filePath))
+                    return GraphResponseHelper.FormatError($"File not found: {filePath}");
+
+                fileBytes = await File.ReadAllBytesAsync(filePath).ConfigureAwait(false);
+                attachmentName = Path.GetFileName(filePath);
+            }
+            else
+            {
+                return GraphResponseHelper.FormatError("Either 'filePath' or 'contentBase64' must be provided.");
+            }
 
             var attachment = new FileAttachment
             {
                 OdataType = "#microsoft.graph.fileAttachment",
-                Name = fileName,
+                Name = attachmentName,
                 ContentType = contentType,
                 ContentBytes = fileBytes
             };
