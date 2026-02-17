@@ -18,6 +18,13 @@ if (args.Length > 0)
 {
     switch (args[0].ToUpperInvariant())
     {
+        case "--VERSION":
+        case "-V":
+            var version = System.Reflection.CustomAttributeExtensions
+                .GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>(typeof(Program).Assembly)?
+                .InformationalVersion ?? "0.0.0-dev";
+            Console.WriteLine($"helix {version}");
+            return;
         case "LOGIN":
             await HandleLoginAsync(args).ConfigureAwait(false);
             return;
