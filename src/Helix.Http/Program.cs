@@ -1,10 +1,13 @@
+using dotenv.net;
 using Helix.Core.Extensions;
 using Helix.Tools.Users;
 using ModelContextProtocol.Server;
 
+DotEnv.Load();
+
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Configuration.AddEnvironmentVariables("HELIX__");
+builder.Configuration.AddEnvironmentVariables();
 
 builder.Services.AddHelixCore(builder.Configuration);
 builder.Services
