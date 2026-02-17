@@ -3,6 +3,7 @@ using Helix.Core.Helpers;
 using Microsoft.Graph;
 using Microsoft.Graph.Models;
 using Microsoft.Graph.Models.ODataErrors;
+using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
 namespace Helix.Tools.SharePoint;
@@ -186,7 +187,7 @@ public class SharePointFileTools(GraphServiceClient graphClient)
         + "The file is saved to a temporary directory on disk and the file path is returned. "
         + "Set returnBase64 to true to return the file content as a base64-encoded string instead "
         + "(useful when the caller cannot access the host filesystem).")]
-    public async Task<string> DownloadDriveItem(
+    public async Task<IEnumerable<ContentBlock>> DownloadDriveItem(
         [Description("The drive ID.")] string driveId,
         [Description("The item ID of the file to download.")] string itemId,
         [Description("Return file content as base64 instead of saving to disk (default: false).")] bool? returnBase64 = null)
@@ -195,11 +196,11 @@ public class SharePointFileTools(GraphServiceClient graphClient)
         {
             var item = await graphClient.Drives[driveId].Items[itemId].GetAsync().ConfigureAwait(false);
             if (item?.Name is null)
-                return GraphResponseHelper.FormatError("Could not retrieve item metadata.");
+                return [new TextContentBlock { Text = GraphResponseHelper.FormatError("Could not retrieve item metadata.") }];
 
             var stream = await graphClient.Drives[driveId].Items[itemId].Content.GetAsync().ConfigureAwait(false);
             if (stream is null)
-                return GraphResponseHelper.FormatError("No content available for this item.");
+                return [new TextContentBlock { Text = GraphResponseHelper.FormatError("No content available for this item.") }];
 
             using var memoryStream = new MemoryStream();
             await stream.CopyToAsync(memoryStream).ConfigureAwait(false);
@@ -209,10 +210,33 @@ public class SharePointFileTools(GraphServiceClient graphClient)
             {
                 var base64 = Convert.ToBase64String(bytes);
                 var sizeDisplay = bytes.Length < 1024 ? $"{bytes.Length} bytes" : $"{bytes.Length / 1024} KB";
+                var mimeType = item.File?.MimeType ?? "application/octet-stream";
 
-                return $"Name: {item.Name}\n"
-                    + $"Size: {sizeDisplay}\n"
-                    + $"ContentBase64: {base64}";
+                var metaText = new TextContentBlock
+                {
+                    Text = $"Name: {item.Name}\nSize: {sizeDisplay}\nMimeType: {mimeType}"
+                };
+
+                // Return images as ImageContentBlock for proper MCP client handling
+                if (mimeType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+                {
+                    return [metaText, new ImageContentBlock { Data = base64, MimeType = mimeType }];
+                }
+
+                // Return other files as EmbeddedResourceBlock with blob data
+                return
+                [
+                    metaText,
+                    new EmbeddedResourceBlock
+                    {
+                        Resource = new BlobResourceContents
+                        {
+                            Uri = $"sharepoint://drives/{driveId}/items/{itemId}/{Uri.EscapeDataString(item.Name)}",
+                            MimeType = mimeType,
+                            Blob = base64
+                        }
+                    }
+                ];
             }
 
             var tempDir = Path.Combine(Path.GetTempPath(), "helix-sharepoint");
@@ -223,13 +247,11 @@ public class SharePointFileTools(GraphServiceClient graphClient)
 
             var fileSizeDisplay = bytes.Length < 1024 ? $"{bytes.Length} bytes" : $"{bytes.Length / 1024} KB";
 
-            return $"File saved to: {filePath}\n"
-                + $"Size: {fileSizeDisplay}\n"
-                + $"Name: {item.Name}";
+            return [new TextContentBlock { Text = $"File saved to: {filePath}\nSize: {fileSizeDisplay}\nName: {item.Name}" }];
         }
         catch (ODataError ex)
         {
-            return GraphResponseHelper.FormatError(ex);
+            return [new TextContentBlock { Text = GraphResponseHelper.FormatError(ex) }];
         }
     }
 }
