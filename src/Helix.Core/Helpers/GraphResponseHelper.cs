@@ -12,6 +12,7 @@ public static class GraphResponseHelper
         WriteIndented = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        TypeInfoResolver = new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver(),
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
     };
 
