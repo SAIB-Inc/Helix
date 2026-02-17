@@ -11,6 +11,7 @@ set -euo pipefail
 REPO="SAIB-Inc/Helix"
 INSTALL_DIR="${HELIX_INSTALL_DIR:-$HOME/.helix/bin}"
 BINARY_NAME="helix"
+TMP_DIR=""
 
 # --- Helpers ---
 
@@ -89,19 +90,18 @@ resolve_version() {
 install() {
     local asset_name="helix-${RID}.tar.gz"
     local download_url="https://github.com/${REPO}/releases/download/${VERSION}/${asset_name}"
-    local tmp_dir
 
-    tmp_dir="$(mktemp -d)"
-    trap 'rm -rf "$tmp_dir"' EXIT
+    TMP_DIR="$(mktemp -d)"
+    trap 'rm -rf "$TMP_DIR"' EXIT
 
     info "Downloading Helix ${VERSION} for ${RID}..."
-    fetch_to_file "$download_url" "${tmp_dir}/${asset_name}"
+    fetch_to_file "$download_url" "${TMP_DIR}/${asset_name}"
 
     info "Extracting..."
-    tar -xzf "${tmp_dir}/${asset_name}" -C "$tmp_dir"
+    tar -xzf "${TMP_DIR}/${asset_name}" -C "$TMP_DIR"
 
     mkdir -p "$INSTALL_DIR"
-    mv "${tmp_dir}/${BINARY_NAME}" "${INSTALL_DIR}/${BINARY_NAME}"
+    mv "${TMP_DIR}/${BINARY_NAME}" "${INSTALL_DIR}/${BINARY_NAME}"
     chmod +x "${INSTALL_DIR}/${BINARY_NAME}"
 
     # macOS: remove quarantine attribute to avoid Gatekeeper prompt
@@ -119,13 +119,20 @@ configure_path() {
         *:"${INSTALL_DIR}":*) return ;;
     esac
 
+    # Detect the user's login shell. When piped into bash, $SHELL may not
+    # reflect the actual default shell, so check the OS default first.
     local shell_name profile_file
-    shell_name="$(basename "${SHELL:-/bin/bash}")"
+    if [ "$(uname -s)" = "Darwin" ]; then
+        # macOS default shell is zsh since Catalina
+        shell_name="zsh"
+    else
+        shell_name="$(basename "${SHELL:-/bin/bash}")"
+    fi
 
     case "$shell_name" in
         zsh)  profile_file="$HOME/.zshrc" ;;
         bash)
-            if [ "$(uname -s)" = "Darwin" ] && [ -f "$HOME/.bash_profile" ]; then
+            if [ -f "$HOME/.bash_profile" ]; then
                 profile_file="$HOME/.bash_profile"
             else
                 profile_file="$HOME/.bashrc"
