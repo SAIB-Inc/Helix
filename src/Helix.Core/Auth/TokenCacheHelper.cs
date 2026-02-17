@@ -1,58 +1,83 @@
 using Microsoft.Identity.Client;
-using Microsoft.Identity.Client.Extensions.Msal;
 
 namespace Helix.Core.Auth;
 
+/// <summary>
+/// Persists the MSAL token cache to a plain file on disk.
+/// Uses SetBeforeAccessAsync/SetAfterAccessAsync callbacks instead of
+/// MsalCacheHelper to avoid macOS Keychain and P/Invoke issues with
+/// trimmed self-contained binaries.
+/// </summary>
 public static class TokenCacheHelper
 {
     private const string CacheFileName = "helix-token-cache.bin";
 
-    private static readonly string CacheDirectory = Path.Combine(
+    private static readonly string CacheFilePath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "Helix");
+        "Helix",
+        CacheFileName);
 
-    public static async Task RegisterCacheAsync(IPublicClientApplication app)
+    private static readonly SemaphoreSlim SyncLock = new(1, 1);
+
+    public static void RegisterCache(IPublicClientApplication app)
     {
         ArgumentNullException.ThrowIfNull(app);
 
-        var builder = new StorageCreationPropertiesBuilder(CacheFileName, CacheDirectory);
+        app.UserTokenCache.SetBeforeAccessAsync(BeforeAccessAsync);
+        app.UserTokenCache.SetAfterAccessAsync(AfterAccessAsync);
+    }
 
-        // Linux requires keyring configuration for encrypted storage
-        if (OperatingSystem.IsLinux())
+    private static async Task BeforeAccessAsync(TokenCacheNotificationArgs args)
+    {
+        await SyncLock.WaitAsync().ConfigureAwait(false);
+
+        if (!File.Exists(CacheFilePath))
         {
-            builder.WithLinuxKeyring(
-                schemaName: "com.helix.tokencache",
-                collection: "default",
-                secretLabel: "Helix MCP Server token cache",
-                attribute1: new KeyValuePair<string, string>("application", "helix"),
-                attribute2: new KeyValuePair<string, string>("version", "1"));
-        }
-        else if (OperatingSystem.IsMacOS())
-        {
-            builder.WithMacKeyChain(
-                serviceName: "Helix",
-                accountName: "HelixTokenCache");
+            return;
         }
 
-        var storageProperties = builder.Build();
-
-        MsalCacheHelper cacheHelper;
         try
         {
-            cacheHelper = await MsalCacheHelper.CreateAsync(storageProperties).ConfigureAwait(false);
-            cacheHelper.VerifyPersistence();
+            var data = await File.ReadAllBytesAsync(CacheFilePath).ConfigureAwait(false);
+            args.TokenCache.DeserializeMsalV3(data);
         }
-        catch (MsalCachePersistenceException)
+        catch (IOException)
         {
-            // If keyring/keychain isn't available, fall back to unencrypted file.
-            // WithUnprotectedFile() works on all platforms (Linux, macOS, Windows).
-            var fallbackProperties = new StorageCreationPropertiesBuilder(CacheFileName, CacheDirectory)
-                .WithUnprotectedFile()
-                .Build();
-
-            cacheHelper = await MsalCacheHelper.CreateAsync(fallbackProperties).ConfigureAwait(false);
+            // Corrupt or locked cache file — delete and continue with empty cache
+            try { File.Delete(CacheFilePath); }
+            catch (IOException) { /* best effort */ }
         }
+    }
 
-        cacheHelper.RegisterCache(app.UserTokenCache);
+    private static async Task AfterAccessAsync(TokenCacheNotificationArgs args)
+    {
+        try
+        {
+            if (!args.HasStateChanged)
+            {
+                return;
+            }
+
+            var data = args.TokenCache.SerializeMsalV3();
+
+            var directory = Path.GetDirectoryName(CacheFilePath);
+            if (directory is not null && !Directory.Exists(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            await File.WriteAllBytesAsync(CacheFilePath, data).ConfigureAwait(false);
+
+            // Owner-only permissions on Unix
+            if (!OperatingSystem.IsWindows())
+            {
+                File.SetUnixFileMode(CacheFilePath,
+                    UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            }
+        }
+        finally
+        {
+            SyncLock.Release();
+        }
     }
 }

@@ -8,7 +8,7 @@ namespace Helix.Core.Auth;
 /// </summary>
 public static class MsalClientFactory
 {
-    public static async Task<IPublicClientApplication> CreateAsync(HelixOptions options)
+    public static Task<IPublicClientApplication> CreateAsync(HelixOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
 
@@ -19,8 +19,8 @@ public static class MsalClientFactory
             .WithAuthority(authority)
             .Build();
 
-        await TokenCacheHelper.RegisterCacheAsync(app).ConfigureAwait(false);
+        TokenCacheHelper.RegisterCache(app);
 
-        return app;
+        return Task.FromResult(app);
     }
 }
