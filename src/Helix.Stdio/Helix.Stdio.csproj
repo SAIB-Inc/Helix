@@ -1,7 +1,25 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
+    <AssemblyName>helix</AssemblyName>
   </PropertyGroup>
+
+  <!-- Publish configuration: self-contained single-file with trimming.
+       Only active during 'dotnet publish -p:PublishSingleFile=true'. -->
+  <PropertyGroup Condition="'$(PublishSingleFile)' == 'true'">
+    <SelfContained>true</SelfContained>
+    <PublishTrimmed>true</PublishTrimmed>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <SuppressTrimAnalysisWarnings>true</SuppressTrimAnalysisWarnings>
+  </PropertyGroup>
+
+  <!-- Preserve assemblies discovered via reflection (MCP tool scanning, DI, MSAL) -->
+  <ItemGroup Condition="'$(PublishTrimmed)' == 'true'">
+    <TrimmerRootAssembly Include="Helix.Tools" />
+    <TrimmerRootAssembly Include="Helix.Core" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="dotenv.net" />
     <PackageReference Include="ModelContextProtocol" />
