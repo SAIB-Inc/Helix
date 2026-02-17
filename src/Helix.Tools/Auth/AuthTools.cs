@@ -88,8 +88,11 @@ public class AuthTools(IPublicClientApplication msalApp, IOptions<HelixOptions> 
             removed++;
         }
 
+        // Delete the token cache file to ensure stale scopes are fully cleared
+        TokenCacheHelper.ClearCache();
+
         return removed > 0
-            ? $"Logged out. Removed {removed} cached account(s)."
-            : "No accounts were cached. Already logged out.";
+            ? $"Logged out. Removed {removed} cached account(s) and cleared token cache."
+            : "No accounts were cached. Token cache cleared.";
     }
 }
