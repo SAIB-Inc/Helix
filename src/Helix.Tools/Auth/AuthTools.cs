@@ -34,20 +34,18 @@ public class AuthTools(IPublicClientApplication msalApp, IOptions<HelixOptions> 
             }
         }
 
-        string? verificationUrl = null;
-        string? userCode = null;
+        var deviceCodeReady = new TaskCompletionSource<DeviceCodeResult>();
 
         LoginSession.PendingAuth = msalApp.AcquireTokenWithDeviceCode(scopes, deviceCodeResult =>
         {
-            verificationUrl = deviceCodeResult.VerificationUrl?.ToString();
-            userCode = deviceCodeResult.UserCode;
+            deviceCodeReady.TrySetResult(deviceCodeResult);
             return Task.CompletedTask;
         }).ExecuteAsync();
 
-        // Wait briefly for the device code callback to fire
-        await Task.Delay(2000).ConfigureAwait(false);
+        // Wait for MSAL to return the device code (no arbitrary delay)
+        var code = await deviceCodeReady.Task.ConfigureAwait(false);
 
-        return $"Tell the user to open {verificationUrl} and enter code: {userCode}\n\n"
+        return $"Tell the user to open {code.VerificationUrl} and enter code: {code.UserCode}\n\n"
             + "Once they complete sign-in, call the 'login-status' tool to confirm authentication.";
     }
 
@@ -55,20 +53,22 @@ public class AuthTools(IPublicClientApplication msalApp, IOptions<HelixOptions> 
      Description("Check if the user has completed the Microsoft 365 sign-in started by 'login'.")]
     public static async Task<string> LoginStatus()
     {
-        if (LoginSession.PendingAuth is null)
+        var pending = LoginSession.PendingAuth;
+
+        if (pending is null)
             return "No login in progress. Call 'login' first.";
 
-        if (!LoginSession.PendingAuth.IsCompleted)
+        if (!pending.IsCompleted)
             return "Still waiting for the user to complete sign-in. Ask them to finish the browser authentication, then call 'login-status' again.";
 
-        if (LoginSession.PendingAuth.IsFaulted)
+        if (pending.IsFaulted)
         {
-            var message = LoginSession.PendingAuth.Exception?.InnerException?.Message ?? "Unknown error";
+            var message = pending.Exception?.InnerException?.Message ?? "Unknown error";
             LoginSession.PendingAuth = null;
             return $"Authentication failed: {message}";
         }
 
-        var result = await LoginSession.PendingAuth.ConfigureAwait(false);
+        var result = await pending.ConfigureAwait(false);
         LoginSession.PendingAuth = null;
         return $"Authenticated as {result.Account.Username}. Token cached — Microsoft 365 tools are now available.";
     }
