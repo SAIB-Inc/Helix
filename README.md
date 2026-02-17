@@ -1,7 +1,8 @@
-# Project Helix
+# Helix
 
 **An open-source Model Context Protocol (MCP) server for Microsoft 365, built with .NET 10.**
 
+[![CI](https://github.com/SAIB-Inc/Helix/actions/workflows/ci.yml/badge.svg)](https://github.com/SAIB-Inc/Helix/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![.NET](https://img.shields.io/badge/.NET-10-purple.svg)](https://dotnet.microsoft.com/)
 [![MCP](https://img.shields.io/badge/MCP-Compatible-blue.svg)](https://modelcontextprotocol.io/)
@@ -10,120 +11,152 @@
 
 ## Overview
 
-**Helix** is an MCP server that bridges AI agents and assistants with the Microsoft 365 ecosystem. It exposes Microsoft 365 services as MCP tools, enabling AI models to interact with Outlook, Teams, OneDrive, SharePoint, Calendar, Planner, and more through a standardized protocol.
+**Helix** is an MCP server that bridges AI agents with Microsoft 365. It exposes M365 services as MCP tools so AI models like Claude can read your email, send messages, manage attachments, and more — all through the standardized [Model Context Protocol](https://modelcontextprotocol.io/).
 
-Built by [SAIB Inc (Softwarez at its Best Incorporated)](https://github.com/saib-inc).
+Built by [SAIB Inc](https://github.com/saib-inc).
 
-## Features
+## Install
 
-- **Full Microsoft 365 Coverage** - Access the complete M365 suite through MCP tools
-- **Dual Transport Support** - Works over both **Stdio** and **SSE** (Server-Sent Events)
-- **Built on .NET 10** - Modern, high-performance, cross-platform runtime
-- **Microsoft Graph API** - Powered by the Microsoft Graph API for unified M365 access
-- **Open Source** - MIT licensed and community-driven
+### One-line installer (macOS & Linux)
 
-## Supported Services
+```bash
+curl -fsSL https://raw.githubusercontent.com/SAIB-Inc/Helix/main/install.sh | bash
+```
 
-| Service | Status |
-|---------|--------|
-| Outlook (Mail) | Planned |
-| Calendar | Planned |
-| Teams | Planned |
-| OneDrive | Planned |
-| SharePoint | Planned |
-| Planner | Planned |
-| Contacts | Planned |
-| To Do | Planned |
+This downloads a self-contained binary to `~/.helix/bin/helix` — no .NET SDK required.
+
+To install a specific version:
+
+```bash
+HELIX_VERSION=0.1.0 curl -fsSL https://raw.githubusercontent.com/SAIB-Inc/Helix/main/install.sh | bash
+```
+
+### Verify
+
+```bash
+helix --version
+```
 
 ## Prerequisites
 
-- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
-- A Microsoft 365 account
-- An Azure AD app registration with appropriate Microsoft Graph permissions
+You need an Azure AD app registration to authenticate with Microsoft 365.
 
-## Getting Started
+1. Go to [Azure Portal > App registrations](https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade) and create a new registration
+2. Set **Supported account types** to your preference (single tenant or multi-tenant)
+3. Under **Authentication**, enable **Allow public client flows** (required for device code auth)
+4. Under **API permissions**, add the following **delegated** permissions:
+   - `User.Read`
+   - `Mail.Read`
+   - `Mail.ReadWrite`
+   - `Mail.Send`
+5. Note your **Application (client) ID** and **Directory (tenant) ID**
 
-### Clone the repository
+## Configure
 
-```bash
-git clone https://github.com/saib-inc/Helix.git
-cd Helix
-```
-
-### Build
-
-```bash
-dotnet build
-```
-
-### Configure
-
-Create an `appsettings.json` or set environment variables for your Azure AD app registration:
-
-```json
-{
-  "AzureAd": {
-    "TenantId": "your-tenant-id",
-    "ClientId": "your-client-id",
-    "ClientSecret": "your-client-secret"
-  }
-}
-```
-
-### Run
-
-**Stdio transport:**
+Set your Azure app credentials via environment variables:
 
 ```bash
-dotnet run -- --transport stdio
+export HELIX__ClientId="your-client-id"
+export HELIX__TenantId="your-tenant-id"   # optional, defaults to "common"
 ```
 
-**SSE transport:**
+Or create a `.env` file in your working directory:
 
-```bash
-dotnet run -- --transport sse
+```env
+HELIX__ClientId=your-client-id
+HELIX__TenantId=your-tenant-id
 ```
 
-## MCP Client Configuration
+## Usage with Claude Desktop
 
-### Claude Desktop
-
-Add the following to your Claude Desktop configuration:
+Add to your `claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
     "helix": {
-      "command": "dotnet",
-      "args": ["run", "--project", "/path/to/Helix"],
+      "command": "helix",
       "env": {
-        "AZURE_TENANT_ID": "your-tenant-id",
-        "AZURE_CLIENT_ID": "your-client-id",
-        "AZURE_CLIENT_SECRET": "your-client-secret"
+        "HELIX__ClientId": "your-client-id",
+        "HELIX__TenantId": "your-tenant-id"
       }
     }
   }
 }
 ```
 
+> If `helix` is not on your PATH, use the full path: `~/.helix/bin/helix`
+
+## Available Tools
+
+### Authentication
+
+| Tool | Description |
+|------|-------------|
+| `login` | Start device code authentication flow |
+| `login-status` | Check if authentication is complete |
+| `logout` | Sign out and clear cached tokens |
+| `get-current-user` | Get the authenticated user's profile |
+
+### Mail
+
+| Tool | Description |
+|------|-------------|
+| `list-mail-messages` | List messages with filtering, search (KQL), and paging |
+| `get-mail-message` | Get a full message by ID |
+| `send-mail` | Send an email |
+| `delete-mail-message` | Delete a message (moves to Deleted Items) |
+| `move-mail-message` | Move a message to a different folder |
+| `update-mail-message` | Update read status, importance, categories, or subject |
+
+### Mail Attachments
+
+| Tool | Description |
+|------|-------------|
+| `list-mail-attachments` | List attachments on a message |
+| `get-mail-attachment` | Download an attachment to disk |
+| `add-mail-attachment` | Attach a file from disk to a draft |
+| `delete-mail-attachment` | Remove an attachment |
+
+### Mail Folders
+
+| Tool | Description |
+|------|-------------|
+| `list-mail-folders` | List all mail folders with unread counts |
+| `list-mail-folder-messages` | List messages in a specific folder |
+
+## Roadmap
+
+| Service | Status |
+|---------|--------|
+| Mail | **Available** |
+| Calendar | Planned |
+| Contacts | Planned |
+| OneDrive | Planned |
+| Teams | Planned |
+| Planner / To Do | Planned |
+
+## Build from Source
+
+If you prefer to build from source instead of using the installer:
+
+```bash
+git clone https://github.com/SAIB-Inc/Helix.git
+cd Helix
+dotnet build
+dotnet run --project src/Helix.Stdio
+```
+
+Requires [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).
+
 ## Contributing
 
-We welcome contributions from the community! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/my-feature`)
-3. Commit your changes (`git commit -m 'Add my feature'`)
-4. Push to the branch (`git push origin feature/my-feature`)
-5. Open a Pull Request
+See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for branch workflow, commit conventions, and design principles.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-Built and maintained by **SAIB Inc (Softwarez at its Best Incorporated)**.
+MIT — see [LICENSE](LICENSE).
 
 ---
 
-> *Helix - Intertwining AI and Microsoft 365.*
+Built and maintained by **[SAIB Inc](https://github.com/saib-inc)**.
