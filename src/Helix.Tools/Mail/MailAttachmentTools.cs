@@ -32,7 +32,7 @@ public class MailAttachmentTools(GraphServiceClient graphClient)
 
     [McpServerTool(Name = "get-mail-attachment", ReadOnly = true),
      Description("Get a specific attachment from a mail message. "
-        + "Returns metadata and content (base64-encoded for file attachments).")]
+        + "File attachments are saved to disk and the file path is returned.")]
     public async Task<string> GetMailAttachment(
         [Description("The unique identifier of the message.")] string messageId,
         [Description("The unique identifier of the attachment.")] string attachmentId)
@@ -72,25 +72,31 @@ public class MailAttachmentTools(GraphServiceClient graphClient)
     }
 
     [McpServerTool(Name = "add-mail-attachment"),
-     Description("Add a file attachment to a mail message (typically a draft). Content must be base64-encoded.")]
+     Description("Add a file attachment to a mail message (typically a draft). "
+        + "Reads the file from the given path on disk — do NOT pass file content inline.")]
     public async Task<string> AddMailAttachment(
         [Description("The unique identifier of the message to attach the file to.")] string messageId,
-        [Description("File name with extension, e.g. 'report.pdf'.")] string name,
-        [Description("MIME type, e.g. 'application/pdf', 'image/png'.")] string contentType,
-        [Description("Base64-encoded file content.")] string contentBytes)
+        [Description("Absolute path to the file on disk, e.g. '/tmp/report.pdf'.")] string filePath,
+        [Description("MIME type, e.g. 'application/pdf', 'image/png', 'text/plain'.")] string contentType)
     {
         try
         {
+            if (!File.Exists(filePath))
+                return $"File not found: {filePath}";
+
+            var fileBytes = await File.ReadAllBytesAsync(filePath).ConfigureAwait(false);
+            var fileName = Path.GetFileName(filePath);
+
             var attachment = new FileAttachment
             {
                 OdataType = "#microsoft.graph.fileAttachment",
-                Name = name,
+                Name = fileName,
                 ContentType = contentType,
-                ContentBytes = Convert.FromBase64String(contentBytes)
+                ContentBytes = fileBytes
             };
 
-            var result = await graphClient.Me.Messages[messageId].Attachments.PostAsync(attachment).ConfigureAwait(false);
-            return GraphResponseHelper.FormatResponse(result);
+            await graphClient.Me.Messages[messageId].Attachments.PostAsync(attachment).ConfigureAwait(false);
+            return GraphResponseHelper.FormatResponse(null);
         }
         catch (ODataError ex)
         {
