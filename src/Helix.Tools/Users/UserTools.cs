@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using Helix.Core.Helpers;
 using Microsoft.Graph;
+using Microsoft.Graph.Models.ODataErrors;
 using ModelContextProtocol.Server;
 
 namespace Helix.Tools.Users;
@@ -12,7 +13,14 @@ public class UserTools(GraphServiceClient graphClient)
      Description("Get the currently authenticated user's profile from Microsoft 365.")]
     public async Task<string> GetCurrentUser()
     {
-        var user = await graphClient.Me.GetAsync().ConfigureAwait(false);
-        return GraphResponseHelper.FormatResponse(user);
+        try
+        {
+            var user = await graphClient.Me.GetAsync().ConfigureAwait(false);
+            return GraphResponseHelper.FormatResponse(user);
+        }
+        catch (ODataError ex)
+        {
+            return GraphResponseHelper.FormatError(ex);
+        }
     }
 }

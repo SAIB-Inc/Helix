@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Microsoft.Graph.Models.ODataErrors;
 
 namespace Helix.Core.Helpers;
 
@@ -11,6 +12,18 @@ public static class GraphResponseHelper
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
     };
+
+    /// <summary>
+    /// Formats a Graph API error into a meaningful JSON error response.
+    /// </summary>
+    public static string FormatError(ODataError error)
+    {
+        ArgumentNullException.ThrowIfNull(error);
+
+        var code = error.Error?.Code ?? "UnknownError";
+        var message = error.Error?.Message ?? error.Message;
+        return JsonSerializer.Serialize(new { error = true, code, message }, SerializerOptions);
+    }
 
     /// <summary>
     /// Formats a Graph API response by serializing to JSON and stripping OData metadata properties.
