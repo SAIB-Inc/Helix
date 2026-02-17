@@ -44,9 +44,10 @@ public static class TokenCacheHelper
         }
         catch (MsalCachePersistenceException)
         {
-            // If keyring/keychain isn't available, fall back to plain file
+            // If keyring/keychain isn't available, fall back to unencrypted file.
+            // WithUnprotectedFile() works on all platforms (Linux, macOS, Windows).
             var fallbackProperties = new StorageCreationPropertiesBuilder(CacheFileName, CacheDirectory)
-                .WithLinuxUnprotectedFile()
+                .WithUnprotectedFile()
                 .Build();
 
             cacheHelper = await MsalCacheHelper.CreateAsync(fallbackProperties).ConfigureAwait(false);
