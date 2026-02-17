@@ -170,6 +170,7 @@ Add to your `claude_desktop_config.json`:
 |------|-------------|
 | `list-site-drives` | List document libraries in a site |
 | `list-drive-children` | List files and folders (root or subfolder) |
+| `search-drive-items` | Search files by name or content across a drive |
 | `get-drive-item` | Get file/folder metadata |
 | `download-drive-item` | Download a file to disk |
 

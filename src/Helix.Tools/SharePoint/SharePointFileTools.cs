@@ -58,6 +58,31 @@ public class SharePointFileTools(GraphServiceClient graphClient)
         }
     }
 
+    [McpServerTool(Name = "search-drive-items", ReadOnly = true),
+     Description("Search for files and folders in a SharePoint document library by name or content. "
+        + "Uses Microsoft Search to find items matching the query across the entire drive. "
+        + "Example: search for 'revenue report' to find spreadsheets, PDFs, or documents related to revenue.")]
+    public async Task<string> SearchDriveItems(
+        [Description("The drive ID (from list-site-drives).")] string driveId,
+        [Description("Search query — matches file names and content, e.g. 'revenue', 'Q4 report', 'budget 2025'.")] string query,
+        [Description("Maximum number of results to return (default 20).")] int? top = null)
+    {
+        try
+        {
+            var results = await graphClient.Drives[driveId].SearchWithQ(query).GetAsSearchWithQGetResponseAsync(config =>
+            {
+                config.QueryParameters.Top = top ?? 20;
+                config.QueryParameters.Select = ["id", "name", "size", "webUrl", "folder", "file", "lastModifiedDateTime", "createdDateTime", "parentReference"];
+            }).ConfigureAwait(false);
+
+            return GraphResponseHelper.FormatResponse(results);
+        }
+        catch (ODataError ex)
+        {
+            return GraphResponseHelper.FormatError(ex);
+        }
+    }
+
     [McpServerTool(Name = "get-drive-item", ReadOnly = true),
      Description("Get metadata for a specific file or folder in a SharePoint document library.")]
     public async Task<string> GetDriveItem(
