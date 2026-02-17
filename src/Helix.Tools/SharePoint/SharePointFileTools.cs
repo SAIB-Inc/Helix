@@ -100,6 +100,87 @@ public class SharePointFileTools(GraphServiceClient graphClient)
         }
     }
 
+    [McpServerTool(Name = "create-drive-folder"),
+     Description("Create a new folder in a SharePoint document library.")]
+    public async Task<string> CreateDriveFolder(
+        [Description("The drive ID.")] string driveId,
+        [Description("Folder name to create.")] string folderName,
+        [Description("Parent folder item ID. Omit to create in root.")] string? parentItemId = null)
+    {
+        try
+        {
+            var folder = new DriveItem
+            {
+                Name = folderName,
+                Folder = new Folder(),
+                AdditionalData = new Dictionary<string, object>
+                {
+                    ["@microsoft.graph.conflictBehavior"] = "rename"
+                }
+            };
+
+            var parentId = string.IsNullOrWhiteSpace(parentItemId) ? "root" : parentItemId;
+            var created = await graphClient.Drives[driveId].Items[parentId].Children.PostAsync(folder).ConfigureAwait(false);
+            return GraphResponseHelper.FormatResponse(created);
+        }
+        catch (ODataError ex)
+        {
+            return GraphResponseHelper.FormatError(ex);
+        }
+    }
+
+    [McpServerTool(Name = "upload-drive-item"),
+     Description("Upload a file to a SharePoint document library. "
+        + "Provide either a file path on the host filesystem or base64-encoded content. "
+        + "For files up to 4MB. For larger files, use the SharePoint web UI.")]
+    public async Task<string> UploadDriveItem(
+        [Description("The drive ID.")] string driveId,
+        [Description("File name for the uploaded file, e.g. 'report.pdf'.")] string fileName,
+        [Description("Parent folder item ID. Omit to upload to root.")] string? parentItemId = null,
+        [Description("Absolute path to the file on disk.")] string? filePath = null,
+        [Description("Base64-encoded file content. Use instead of filePath when the file is not on the host filesystem.")] string? contentBase64 = null)
+    {
+        try
+        {
+            byte[] fileBytes;
+
+            if (!string.IsNullOrWhiteSpace(contentBase64))
+            {
+                try
+                {
+                    fileBytes = Convert.FromBase64String(contentBase64);
+                }
+                catch (FormatException)
+                {
+                    return GraphResponseHelper.FormatError("Invalid base64 content in 'contentBase64' parameter.");
+                }
+            }
+            else if (!string.IsNullOrWhiteSpace(filePath))
+            {
+                if (!File.Exists(filePath))
+                    return GraphResponseHelper.FormatError($"File not found: {filePath}");
+
+                fileBytes = await File.ReadAllBytesAsync(filePath).ConfigureAwait(false);
+            }
+            else
+            {
+                return GraphResponseHelper.FormatError("Either 'filePath' or 'contentBase64' must be provided.");
+            }
+
+            var parentId = string.IsNullOrWhiteSpace(parentItemId) ? "root" : parentItemId;
+            using var stream = new MemoryStream(fileBytes);
+            var uploaded = await graphClient.Drives[driveId].Items[parentId]
+                .ItemWithPath(fileName).Content
+                .PutAsync(stream).ConfigureAwait(false);
+
+            return GraphResponseHelper.FormatResponse(uploaded);
+        }
+        catch (ODataError ex)
+        {
+            return GraphResponseHelper.FormatError(ex);
+        }
+    }
+
     [McpServerTool(Name = "download-drive-item", ReadOnly = true),
      Description("Download a file from a SharePoint document library. "
         + "The file is saved to a temporary directory on disk and the file path is returned.")]

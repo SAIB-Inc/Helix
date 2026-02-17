@@ -172,6 +172,8 @@ Add to your `claude_desktop_config.json`:
 | `list-drive-children` | List files and folders (root or subfolder) |
 | `search-drive-items` | Search files by name or content across a drive |
 | `get-drive-item` | Get file/folder metadata |
+| `create-drive-folder` | Create a new folder in a document library |
+| `upload-drive-item` | Upload a file (from disk or base64) |
 | `download-drive-item` | Download a file to disk |
 
 ## Roadmap
