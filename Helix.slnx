@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Helix.Core/Helix.Core.csproj" />
+    <Project Path="src/Helix.Tools/Helix.Tools.csproj" />
+    <Project Path="src/Helix.Stdio/Helix.Stdio.csproj" />
+    <Project Path="src/Helix.Http/Helix.Http.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Helix.Core.Tests/Helix.Core.Tests.csproj" />
+    <Project Path="tests/Helix.Tools.Tests/Helix.Tools.Tests.csproj" />
+  </Folder>
+</Solution>
