@@ -183,10 +183,13 @@ public class SharePointFileTools(GraphServiceClient graphClient)
 
     [McpServerTool(Name = "download-drive-item", ReadOnly = true),
      Description("Download a file from a SharePoint document library. "
-        + "The file is saved to a temporary directory on disk and the file path is returned.")]
+        + "The file is saved to a temporary directory on disk and the file path is returned. "
+        + "Set returnBase64 to true to return the file content as a base64-encoded string instead "
+        + "(useful when the caller cannot access the host filesystem).")]
     public async Task<string> DownloadDriveItem(
         [Description("The drive ID.")] string driveId,
-        [Description("The item ID of the file to download.")] string itemId)
+        [Description("The item ID of the file to download.")] string itemId,
+        [Description("Return file content as base64 instead of saving to disk (default: false).")] bool? returnBase64 = null)
     {
         try
         {
@@ -198,19 +201,30 @@ public class SharePointFileTools(GraphServiceClient graphClient)
             if (stream is null)
                 return GraphResponseHelper.FormatError("No content available for this item.");
 
+            using var memoryStream = new MemoryStream();
+            await stream.CopyToAsync(memoryStream).ConfigureAwait(false);
+            var bytes = memoryStream.ToArray();
+
+            if (returnBase64 == true)
+            {
+                var base64 = Convert.ToBase64String(bytes);
+                var sizeDisplay = bytes.Length < 1024 ? $"{bytes.Length} bytes" : $"{bytes.Length / 1024} KB";
+
+                return $"Name: {item.Name}\n"
+                    + $"Size: {sizeDisplay}\n"
+                    + $"ContentBase64: {base64}";
+            }
+
             var tempDir = Path.Combine(Path.GetTempPath(), "helix-sharepoint");
             Directory.CreateDirectory(tempDir);
             var filePath = Path.Combine(tempDir, item.Name);
 
-            var fileStream = File.Create(filePath);
-            await using var _ = fileStream.ConfigureAwait(false);
-            await stream.CopyToAsync(fileStream).ConfigureAwait(false);
+            await File.WriteAllBytesAsync(filePath, bytes).ConfigureAwait(false);
 
-            var sizeBytes = new FileInfo(filePath).Length;
-            var sizeDisplay = sizeBytes < 1024 ? $"{sizeBytes} bytes" : $"{sizeBytes / 1024} KB";
+            var fileSizeDisplay = bytes.Length < 1024 ? $"{bytes.Length} bytes" : $"{bytes.Length / 1024} KB";
 
             return $"File saved to: {filePath}\n"
-                + $"Size: {sizeDisplay}\n"
+                + $"Size: {fileSizeDisplay}\n"
                 + $"Name: {item.Name}";
         }
         catch (ODataError ex)
