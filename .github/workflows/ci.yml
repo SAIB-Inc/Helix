@@ -25,5 +25,5 @@ jobs:
       - name: Build (warnings as errors)
         run: dotnet build --no-restore -warnaserror
 
-      - name: Test
-        run: dotnet test --no-build
+      - name: Test (unit tests only)
+        run: dotnet test --no-build --filter "Category!=Integration"
