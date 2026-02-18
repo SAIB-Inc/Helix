@@ -1,0 +1,3 @@
+[*.cs]
+# xUnit requires public test classes, fixtures, and collection definitions
+dotnet_diagnostic.CA1515.severity = none
