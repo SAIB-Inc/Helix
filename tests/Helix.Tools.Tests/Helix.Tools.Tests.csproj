@@ -4,6 +4,7 @@
     <PackageReference Include="xunit.v3" />
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="Moq" />
+    <PackageReference Include="dotenv.net" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Helix.Tools\Helix.Tools.csproj" />
