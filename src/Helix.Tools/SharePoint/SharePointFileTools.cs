@@ -185,17 +185,32 @@ public class SharePointFileTools(GraphServiceClient graphClient)
      Description("Download a file from a SharePoint document library. "
         + "The file is saved to a temporary directory on disk and the file path is returned. "
         + "Set returnBase64 to true to return the file content as a base64-encoded string instead "
-        + "(useful when the caller cannot access the host filesystem).")]
+        + "(useful when the caller cannot access the host filesystem). "
+        + "Set returnUrl to true to return a pre-authenticated short-lived download URL instead of the file content "
+        + "(useful when the caller needs to provide a direct download link to the user).")]
     public async Task<string> DownloadDriveItem(
         [Description("The drive ID.")] string driveId,
         [Description("The item ID of the file to download.")] string itemId,
-        [Description("Return file content as base64 instead of saving to disk (default: false).")] bool? returnBase64 = null)
+        [Description("Return file content as base64 instead of saving to disk (default: false).")] bool? returnBase64 = null,
+        [Description("Return a pre-authenticated download URL instead of the file content (default: false).")] bool? returnUrl = null)
     {
         try
         {
             var item = await graphClient.Drives[driveId].Items[itemId].GetAsync().ConfigureAwait(false);
             if (item?.Name is null)
                 return GraphResponseHelper.FormatError("Could not retrieve item metadata.");
+
+            if (returnUrl == true)
+            {
+                if (item.AdditionalData.TryGetValue("@microsoft.graph.downloadUrl", out var urlObj)
+                    && urlObj is string downloadUrl)
+                {
+                    return $"Name: {item.Name}\n"
+                        + $"DownloadUrl: {downloadUrl}";
+                }
+
+                return GraphResponseHelper.FormatError("No download URL available for this item.");
+            }
 
             var stream = await graphClient.Drives[driveId].Items[itemId].Content.GetAsync().ConfigureAwait(false);
             if (stream is null)
