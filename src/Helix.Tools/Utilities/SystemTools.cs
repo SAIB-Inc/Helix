@@ -1,6 +1,6 @@
 using System.ComponentModel;
 using System.Reflection;
-using System.Text.Json;
+using Helix.Core.Helpers;
 using ModelContextProtocol.Server;
 
 namespace Helix.Tools.Utilities;
@@ -16,6 +16,8 @@ public sealed class SystemTools
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
             .InformationalVersion ?? "0.0.0-dev";
 
-        return JsonSerializer.Serialize(new { version });
+        return GraphResponseHelper.FormatResponse(new VersionInfo(version));
     }
+
+    private sealed record VersionInfo(string Version);
 }
