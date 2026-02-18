@@ -66,6 +66,22 @@ public static class GraphResponseHelper
         }
     }
 
+    /// <summary>
+    /// Parses a parameter as a boolean, accepting both JSON booleans and strings.
+    /// This works around MCP clients that send boolean values as JSON strings
+    /// instead of JSON booleans (e.g. "true" instead of true).
+    /// </summary>
+    public static bool IsTruthy(object? value) => value switch
+    {
+        bool b => b,
+        string s => string.Equals(s, "true", StringComparison.OrdinalIgnoreCase),
+        JsonElement { ValueKind: JsonValueKind.True } => true,
+        JsonElement { ValueKind: JsonValueKind.False } => false,
+        JsonElement je when je.ValueKind == JsonValueKind.String =>
+            string.Equals(je.GetString(), "true", StringComparison.OrdinalIgnoreCase),
+        _ => false
+    };
+
     private static void StripODataFromObject(JsonObject obj)
     {
         var keysToRemove = obj

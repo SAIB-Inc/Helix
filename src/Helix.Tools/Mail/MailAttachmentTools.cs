@@ -38,7 +38,7 @@ public class MailAttachmentTools(GraphServiceClient graphClient)
     public async Task<string> GetMailAttachment(
         [Description("The unique identifier of the message.")] string messageId,
         [Description("The unique identifier of the attachment.")] string attachmentId,
-        [Description("Return file content as base64 instead of saving to disk (default: false).")] bool? returnBase64 = null)
+        [Description("Return file content as base64 instead of saving to disk (default: false).")] object? returnBase64 = null)
     {
         try
         {
@@ -50,7 +50,7 @@ public class MailAttachmentTools(GraphServiceClient graphClient)
                 var sizeBytes = fileAttachment.ContentBytes.Length;
                 var sizeDisplay = sizeBytes < 1024 ? $"{sizeBytes} bytes" : $"{sizeBytes / 1024} KB";
 
-                if (returnBase64 == true)
+                if (GraphResponseHelper.IsTruthy(returnBase64))
                 {
                     var base64 = Convert.ToBase64String(fileAttachment.ContentBytes);
                     fileAttachment.ContentBytes = null;
