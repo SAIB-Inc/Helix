@@ -14,7 +14,8 @@ public class MailDraftTools(GraphServiceClient graphClient)
     [McpServerTool(Name = "create-draft-message"),
      Description("Create a draft email message in the Drafts folder. "
         + "Returns the draft message with its ID, which can be used with 'add-mail-attachment' to attach files "
-        + "and then 'send-draft-message' to send it.")]
+        + "and then 'send-draft-message' to send it. "
+        + "IMPORTANT: Always confirm with the user before calling this tool.")]
     public async Task<string> CreateDraftMessage(
         [Description("Email subject line.")] string subject,
         [Description("Email body content (plain text or HTML depending on bodyContentType).")] string body,
@@ -57,9 +58,61 @@ public class MailDraftTools(GraphServiceClient graphClient)
         }
     }
 
+    [McpServerTool(Name = "update-draft-message"),
+     Description("Update a draft email message. Only provided fields are updated. "
+        + "Use this to modify the subject, body, or recipients of a draft before sending. "
+        + "IMPORTANT: Always confirm with the user before calling this tool.")]
+    public async Task<string> UpdateDraftMessage(
+        [Description("The unique identifier of the draft message to update.")] string messageId,
+        [Description("Updated email subject line.")] string? subject = null,
+        [Description("Updated email body content (plain text or HTML depending on bodyContentType).")] string? body = null,
+        [Description("Body content type: text or html.")] string? bodyContentType = null,
+        [Description("Updated comma-separated 'To' recipient email addresses. Replaces all existing To recipients.")] string? toRecipients = null,
+        [Description("Updated comma-separated 'CC' recipient email addresses. Replaces all existing CC recipients.")] string? ccRecipients = null,
+        [Description("Updated comma-separated 'BCC' recipient email addresses. Replaces all existing BCC recipients.")] string? bccRecipients = null,
+        [Description("Message importance: low, normal, or high.")] string? importance = null)
+    {
+        try
+        {
+            var message = new Message();
+
+            if (!string.IsNullOrEmpty(subject))
+                message.Subject = subject;
+
+            if (!string.IsNullOrWhiteSpace(body))
+            {
+                message.Body = new ItemBody
+                {
+                    ContentType = MailTools.ParseBodyContentType(bodyContentType),
+                    Content = body
+                };
+            }
+
+            if (!string.IsNullOrWhiteSpace(toRecipients))
+                message.ToRecipients = MailTools.ParseRecipients(toRecipients);
+
+            if (!string.IsNullOrWhiteSpace(ccRecipients))
+                message.CcRecipients = MailTools.ParseRecipients(ccRecipients);
+
+            if (!string.IsNullOrWhiteSpace(bccRecipients))
+                message.BccRecipients = MailTools.ParseRecipients(bccRecipients);
+
+            if (!string.IsNullOrWhiteSpace(importance))
+                message.Importance = MailTools.ParseImportance(importance);
+
+            var updated = await graphClient.Me.Messages[messageId].PatchAsync(message).ConfigureAwait(false);
+            return GraphResponseHelper.FormatResponse(updated);
+        }
+        catch (ODataError ex)
+        {
+            return GraphResponseHelper.FormatError(ex);
+        }
+    }
+
     [McpServerTool(Name = "send-draft-message"),
      Description("Send an existing draft message by its ID. "
-        + "Use after 'create-draft-message' and optionally 'add-mail-attachment'.")]
+        + "Use after 'create-draft-message' and optionally 'add-mail-attachment'. "
+        + "IMPORTANT: Always confirm with the user before calling this tool.")]
     public async Task<string> SendDraftMessage(
         [Description("The unique identifier of the draft message to send.")] string messageId)
     {

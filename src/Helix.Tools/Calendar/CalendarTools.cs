@@ -129,7 +129,8 @@ public class CalendarTools(GraphServiceClient graphClient)
     [McpServerTool(Name = "create-calendar-event"),
      Description("Create a new calendar event. "
         + "Times must be in ISO 8601 format (e.g. '2025-06-15T14:00:00'). "
-        + "Time zones use IANA format (e.g. 'America/New_York', 'UTC', 'Asia/Tokyo').")]
+        + "Time zones use IANA format (e.g. 'America/New_York', 'UTC', 'Asia/Tokyo'). "
+        + "IMPORTANT: Always confirm with the user before calling this tool.")]
     public async Task<string> CreateCalendarEvent(
         [Description("Event subject/title.")] string subject,
         [Description("Start date/time in ISO 8601 format, e.g. '2025-06-15T14:00:00'.")] string startDateTime,
@@ -191,7 +192,8 @@ public class CalendarTools(GraphServiceClient graphClient)
     }
 
     [McpServerTool(Name = "update-calendar-event"),
-     Description("Update an existing calendar event. Only provided fields are updated.")]
+     Description("Update an existing calendar event. Only provided fields are updated. "
+        + "IMPORTANT: Always confirm with the user before calling this tool.")]
     public async Task<string> UpdateCalendarEvent(
         [Description("The unique identifier of the event to update.")] string eventId,
         [Description("Updated event subject/title.")] string? subject = null,
@@ -236,8 +238,8 @@ public class CalendarTools(GraphServiceClient graphClient)
             if (isAllDay is not null)
                 calendarEvent.IsAllDay = GraphResponseHelper.IsTruthy(isAllDay);
 
-            await graphClient.Me.Events[eventId].PatchAsync(calendarEvent).ConfigureAwait(false);
-            return GraphResponseHelper.FormatResponse(null);
+            var updated = await graphClient.Me.Events[eventId].PatchAsync(calendarEvent).ConfigureAwait(false);
+            return GraphResponseHelper.FormatResponse(updated);
         }
         catch (ODataError ex)
         {
@@ -246,7 +248,8 @@ public class CalendarTools(GraphServiceClient graphClient)
     }
 
     [McpServerTool(Name = "delete-calendar-event"),
-     Description("Delete a calendar event.")]
+     Description("Delete a calendar event. "
+        + "IMPORTANT: Always confirm with the user before calling this tool.")]
     public async Task<string> DeleteCalendarEvent(
         [Description("The unique identifier of the event to delete.")] string eventId)
     {
@@ -262,7 +265,8 @@ public class CalendarTools(GraphServiceClient graphClient)
     }
 
     [McpServerTool(Name = "respond-calendar-event"),
-     Description("Respond to a calendar event invitation (accept, decline, or tentatively accept).")]
+     Description("Respond to a calendar event invitation (accept, decline, or tentatively accept). "
+        + "IMPORTANT: Always confirm with the user before calling this tool.")]
     public async Task<string> RespondCalendarEvent(
         [Description("The unique identifier of the event.")] string eventId,
         [Description("Response type: accept, decline, or tentative.")] string response,

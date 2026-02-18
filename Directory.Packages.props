@@ -6,24 +6,20 @@
     <!-- MCP SDK -->
     <PackageVersion Include="ModelContextProtocol" Version="0.8.0-preview.1" />
     <PackageVersion Include="ModelContextProtocol.AspNetCore" Version="0.8.0-preview.1" />
-
     <!-- Microsoft Graph -->
     <PackageVersion Include="Microsoft.Graph" Version="5.102.0" />
-
     <!-- Authentication -->
     <PackageVersion Include="Azure.Identity" Version="1.17.1" />
     <PackageVersion Include="Microsoft.Identity.Client" Version="4.82.1" />
-
     <!-- Environment -->
     <PackageVersion Include="dotenv.net" Version="4.0.0" />
-
     <!-- Hosting -->
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.3" />
     <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.3" />
     <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.3" />
-
     <!-- Testing -->
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.0.1" />
+    <PackageVersion Include="ReverseMarkdown" Version="5.0.0" />
     <PackageVersion Include="xunit.v3" Version="3.2.2" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
     <PackageVersion Include="Moq" Version="4.20.72" />

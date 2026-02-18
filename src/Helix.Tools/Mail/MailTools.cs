@@ -2,7 +2,6 @@ using System.ComponentModel;
 using Helix.Core.Helpers;
 using Microsoft.Graph;
 using Microsoft.Graph.Me.Messages.Item.Move;
-using Microsoft.Graph.Me.Messages.Item.Send;
 using Microsoft.Graph.Me.SendMail;
 using Microsoft.Graph.Models;
 using Microsoft.Graph.Models.ODataErrors;
@@ -58,13 +57,25 @@ public class MailTools(GraphServiceClient graphClient)
     }
 
     [McpServerTool(Name = "get-mail-message", ReadOnly = true),
-     Description("Get a specific mail message by its ID. Returns the full message including body content.")]
+     Description("Get a specific mail message by its ID. "
+        + "By default the HTML body is converted to Markdown to save context. "
+        + "Set includeFullHtml to true to get the original HTML body.")]
     public async Task<string> GetMailMessage(
-        [Description("The unique identifier of the message.")] string messageId)
+        [Description("The unique identifier of the message.")] string messageId,
+        [Description("Return the original HTML body instead of Markdown (default: false).")] object? includeFullHtml = null)
     {
         try
         {
             var message = await graphClient.Me.Messages[messageId].GetAsync().ConfigureAwait(false);
+
+            if (message?.Body?.Content is not null
+                && message.Body.ContentType == BodyType.Html
+                && !GraphResponseHelper.IsTruthy(includeFullHtml))
+            {
+                message.Body.Content = HtmlHelper.ConvertToMarkdown(message.Body.Content);
+                message.Body.ContentType = BodyType.Text;
+            }
+
             return GraphResponseHelper.FormatResponse(message);
         }
         catch (ODataError ex)
@@ -75,7 +86,7 @@ public class MailTools(GraphServiceClient graphClient)
 
     [McpServerTool(Name = "send-mail"),
      Description("Send an email message. "
-        + "IMPORTANT: Never guess or fabricate email addresses. Always confirm recipient addresses with the user.")]
+        + "IMPORTANT: Always confirm with the user before calling this tool. Never guess or fabricate email addresses.")]
     public async Task<string> SendMail(
         [Description("Email subject line.")] string subject,
         [Description("Email body content (plain text or HTML depending on bodyContentType).")] string body,
@@ -197,7 +208,8 @@ public class MailTools(GraphServiceClient graphClient)
     }
 
     [McpServerTool(Name = "delete-mail-message"),
-     Description("Delete a mail message. The message is moved to the Deleted Items folder.")]
+     Description("Delete a mail message. The message is moved to the Deleted Items folder. "
+        + "IMPORTANT: Always confirm with the user before calling this tool.")]
     public async Task<string> DeleteMailMessage(
         [Description("The unique identifier of the message to delete.")] string messageId)
     {
@@ -214,19 +226,20 @@ public class MailTools(GraphServiceClient graphClient)
 
     [McpServerTool(Name = "move-mail-message"),
      Description("Move a mail message to a different folder. Use 'list-mail-folders' to get folder IDs. "
-        + "Well-known folder names: inbox, drafts, sentitems, deleteditems, archive, junkemail.")]
+        + "Well-known folder names: inbox, drafts, sentitems, deleteditems, archive, junkemail. "
+        + "IMPORTANT: Always confirm with the user before calling this tool.")]
     public async Task<string> MoveMailMessage(
         [Description("The unique identifier of the message to move.")] string messageId,
         [Description("Destination folder ID or well-known name (e.g. 'inbox', 'archive').")] string destinationFolderId)
     {
         try
         {
-            await graphClient.Me.Messages[messageId].Move.PostAsync(new MovePostRequestBody
+            var moved = await graphClient.Me.Messages[messageId].Move.PostAsync(new MovePostRequestBody
             {
                 DestinationId = destinationFolderId
             }).ConfigureAwait(false);
 
-            return GraphResponseHelper.FormatResponse(null);
+            return GraphResponseHelper.FormatResponse(moved);
         }
         catch (ODataError ex)
         {
@@ -235,7 +248,8 @@ public class MailTools(GraphServiceClient graphClient)
     }
 
     [McpServerTool(Name = "update-mail-message"),
-     Description("Update properties of a mail message such as read status, categories, importance, or subject.")]
+     Description("Update properties of a mail message such as read status, categories, importance, or subject. "
+        + "IMPORTANT: Always confirm with the user before calling this tool.")]
     public async Task<string> UpdateMailMessage(
         [Description("The unique identifier of the message to update.")] string messageId,
         [Description("Mark as read (true) or unread (false).")] object? isRead = null,
@@ -256,8 +270,8 @@ public class MailTools(GraphServiceClient graphClient)
             if (!string.IsNullOrEmpty(subject))
                 message.Subject = subject;
 
-            await graphClient.Me.Messages[messageId].PatchAsync(message).ConfigureAwait(false);
-            return GraphResponseHelper.FormatResponse(null);
+            var updated = await graphClient.Me.Messages[messageId].PatchAsync(message).ConfigureAwait(false);
+            return GraphResponseHelper.FormatResponse(updated);
         }
         catch (ODataError ex)
         {

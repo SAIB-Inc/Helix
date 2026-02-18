@@ -69,7 +69,8 @@ public class SharePointListTools(GraphServiceClient graphClient)
     [McpServerTool(Name = "create-list-item"),
      Description("Create a new item in a SharePoint list. "
         + "Fields are passed as a JSON object string, e.g. '{\"Title\": \"My Item\", \"Status\": \"Active\"}'. "
-        + "Use 'get-site-list' to see available column names.")]
+        + "Use 'get-site-list' to see available column names. "
+        + "IMPORTANT: Always confirm with the user before calling this tool.")]
     public async Task<string> CreateListItem(
         [Description("The site ID.")] string siteId,
         [Description("The list ID.")] string listId,
@@ -97,7 +98,8 @@ public class SharePointListTools(GraphServiceClient graphClient)
 
     [McpServerTool(Name = "update-list-item"),
      Description("Update an existing item in a SharePoint list. "
-        + "Fields are passed as a JSON object string with only the fields to update.")]
+        + "Fields are passed as a JSON object string with only the fields to update. "
+        + "IMPORTANT: Always confirm with the user before calling this tool.")]
     public async Task<string> UpdateListItem(
         [Description("The site ID.")] string siteId,
         [Description("The list ID.")] string listId,
@@ -112,8 +114,8 @@ public class SharePointListTools(GraphServiceClient graphClient)
 
             var fieldValueSet = new FieldValueSet { AdditionalData = fieldValues };
 
-            await graphClient.Sites[siteId].Lists[listId].Items[itemId].Fields.PatchAsync(fieldValueSet).ConfigureAwait(false);
-            return GraphResponseHelper.FormatResponse(null);
+            var updated = await graphClient.Sites[siteId].Lists[listId].Items[itemId].Fields.PatchAsync(fieldValueSet).ConfigureAwait(false);
+            return GraphResponseHelper.FormatResponse(updated);
         }
         catch (ODataError ex)
         {
@@ -122,7 +124,8 @@ public class SharePointListTools(GraphServiceClient graphClient)
     }
 
     [McpServerTool(Name = "delete-list-item"),
-     Description("Delete an item from a SharePoint list.")]
+     Description("Delete an item from a SharePoint list. "
+        + "IMPORTANT: Always confirm with the user before calling this tool.")]
     public async Task<string> DeleteListItem(
         [Description("The site ID.")] string siteId,
         [Description("The list ID.")] string listId,

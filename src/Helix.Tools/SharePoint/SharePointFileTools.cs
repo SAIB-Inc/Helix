@@ -101,7 +101,8 @@ public class SharePointFileTools(GraphServiceClient graphClient)
     }
 
     [McpServerTool(Name = "create-drive-folder"),
-     Description("Create a new folder in a SharePoint document library.")]
+     Description("Create a new folder in a SharePoint document library. "
+        + "IMPORTANT: Always confirm with the user before calling this tool.")]
     public async Task<string> CreateDriveFolder(
         [Description("The drive ID.")] string driveId,
         [Description("Folder name to create.")] string folderName,
@@ -132,7 +133,8 @@ public class SharePointFileTools(GraphServiceClient graphClient)
     [McpServerTool(Name = "upload-drive-item"),
      Description("Upload a file to a SharePoint document library. "
         + "Provide either a file path on the host filesystem or base64-encoded content. "
-        + "For files up to 4MB. For larger files, use the SharePoint web UI.")]
+        + "For files up to 4MB. For larger files, use the SharePoint web UI. "
+        + "IMPORTANT: Always confirm with the user before calling this tool.")]
     public async Task<string> UploadDriveItem(
         [Description("The drive ID.")] string driveId,
         [Description("File name for the uploaded file, e.g. 'report.pdf'.")] string fileName,
