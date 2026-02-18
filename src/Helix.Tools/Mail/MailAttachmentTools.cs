@@ -3,7 +3,6 @@ using Helix.Core.Helpers;
 using Microsoft.Graph;
 using Microsoft.Graph.Models;
 using Microsoft.Graph.Models.ODataErrors;
-using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
 namespace Helix.Tools.Mail;
@@ -36,7 +35,7 @@ public class MailAttachmentTools(GraphServiceClient graphClient)
         + "File attachments are saved to disk and the file path is returned. "
         + "Set returnBase64 to true to return the file content as a base64-encoded string instead "
         + "(useful when the caller cannot access the host filesystem).")]
-    public async Task<IEnumerable<ContentBlock>> GetMailAttachment(
+    public async Task<string> GetMailAttachment(
         [Description("The unique identifier of the message.")] string messageId,
         [Description("The unique identifier of the attachment.")] string attachmentId,
         [Description("Return file content as base64 instead of saving to disk (default: false).")] bool? returnBase64 = null)
@@ -50,29 +49,17 @@ public class MailAttachmentTools(GraphServiceClient graphClient)
                 var safeName = fileAttachment.Name ?? $"attachment-{attachmentId}";
                 var sizeBytes = fileAttachment.ContentBytes.Length;
                 var sizeDisplay = sizeBytes < 1024 ? $"{sizeBytes} bytes" : $"{sizeBytes / 1024} KB";
-                var mimeType = fileAttachment.ContentType ?? "application/octet-stream";
 
                 if (returnBase64 == true)
                 {
                     var base64 = Convert.ToBase64String(fileAttachment.ContentBytes);
+                    fileAttachment.ContentBytes = null;
+                    var metadata = GraphResponseHelper.FormatResponse(fileAttachment);
 
-                    if (mimeType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
-                    {
-                        return [new ImageContentBlock { Data = base64, MimeType = mimeType }];
-                    }
-
-                    return
-                    [
-                        new EmbeddedResourceBlock
-                        {
-                            Resource = new BlobResourceContents
-                            {
-                                Uri = $"mail://messages/{messageId}/attachments/{attachmentId}/{Uri.EscapeDataString(safeName)}",
-                                MimeType = mimeType,
-                                Blob = base64
-                            }
-                        }
-                    ];
+                    return $"Name: {safeName}\n"
+                        + $"Size: {sizeDisplay}\n"
+                        + $"ContentBase64: {base64}\n\n"
+                        + $"Metadata:\n{metadata}";
                 }
 
                 var tempDir = Path.Combine(Path.GetTempPath(), "helix-attachments");
@@ -84,14 +71,16 @@ public class MailAttachmentTools(GraphServiceClient graphClient)
                 fileAttachment.ContentBytes = null;
                 var meta = GraphResponseHelper.FormatResponse(fileAttachment);
 
-                return [new TextContentBlock { Text = $"Attachment saved to: {filePath}\nSize: {sizeDisplay}\n\nMetadata:\n{meta}" }];
+                return $"Attachment saved to: {filePath}\n"
+                    + $"Size: {sizeDisplay}\n\n"
+                    + $"Metadata:\n{meta}";
             }
 
-            return [new TextContentBlock { Text = GraphResponseHelper.FormatResponse(attachment) }];
+            return GraphResponseHelper.FormatResponse(attachment);
         }
         catch (ODataError ex)
         {
-            return [new TextContentBlock { Text = GraphResponseHelper.FormatError(ex) }];
+            return GraphResponseHelper.FormatError(ex);
         }
     }
 
