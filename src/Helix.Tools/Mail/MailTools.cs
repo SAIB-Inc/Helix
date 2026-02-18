@@ -238,7 +238,7 @@ public class MailTools(GraphServiceClient graphClient)
      Description("Update properties of a mail message such as read status, categories, importance, or subject.")]
     public async Task<string> UpdateMailMessage(
         [Description("The unique identifier of the message to update.")] string messageId,
-        [Description("Mark as read (true) or unread (false).")] bool? isRead = null,
+        [Description("Mark as read (true) or unread (false).")] object? isRead = null,
         [Description("Comma-separated categories to assign.")] string? categories = null,
         [Description("Message importance: low, normal, or high.")] string? importance = null,
         [Description("Updated subject line.")] string? subject = null)
@@ -247,8 +247,8 @@ public class MailTools(GraphServiceClient graphClient)
         {
             var message = new Message();
 
-            if (isRead.HasValue)
-                message.IsRead = isRead.Value;
+            if (isRead is not null)
+                message.IsRead = GraphResponseHelper.IsTruthy(isRead);
             if (!string.IsNullOrEmpty(categories))
                 message.Categories = [.. categories.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
             if (!string.IsNullOrEmpty(importance))

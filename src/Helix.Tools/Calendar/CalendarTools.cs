@@ -140,8 +140,8 @@ public class CalendarTools(GraphServiceClient graphClient)
         [Description("Body content type: text or html (default: text).")] string? bodyContentType = null,
         [Description("Location display name, e.g. 'Conference Room A'.")] string? location = null,
         [Description("Comma-separated attendee email addresses.")] string? attendees = null,
-        [Description("Whether to create as an online meeting with a join link (default: false).")] bool? isOnlineMeeting = null,
-        [Description("Whether this is an all-day event (default: false).")] bool? isAllDay = null)
+        [Description("Whether to create as an online meeting with a join link (default: false).")] object? isOnlineMeeting = null,
+        [Description("Whether this is an all-day event (default: false).")] object? isAllDay = null)
     {
         try
         {
@@ -175,10 +175,10 @@ public class CalendarTools(GraphServiceClient graphClient)
                     })];
             }
 
-            if (isOnlineMeeting == true)
+            if (GraphResponseHelper.IsTruthy(isOnlineMeeting))
                 calendarEvent.IsOnlineMeeting = true;
 
-            if (isAllDay == true)
+            if (GraphResponseHelper.IsTruthy(isAllDay))
                 calendarEvent.IsAllDay = true;
 
             var created = await graphClient.Me.Events.PostAsync(calendarEvent).ConfigureAwait(false);
@@ -202,8 +202,8 @@ public class CalendarTools(GraphServiceClient graphClient)
         [Description("Updated event body content.")] string? body = null,
         [Description("Body content type: text or html.")] string? bodyContentType = null,
         [Description("Updated location display name.")] string? location = null,
-        [Description("Whether this is an online meeting.")] bool? isOnlineMeeting = null,
-        [Description("Whether this is an all-day event.")] bool? isAllDay = null)
+        [Description("Whether this is an online meeting (true or false).")] object? isOnlineMeeting = null,
+        [Description("Whether this is an all-day event (true or false).")] object? isAllDay = null)
     {
         try
         {
@@ -230,11 +230,11 @@ public class CalendarTools(GraphServiceClient graphClient)
             if (!string.IsNullOrWhiteSpace(location))
                 calendarEvent.Location = new Location { DisplayName = location };
 
-            if (isOnlineMeeting.HasValue)
-                calendarEvent.IsOnlineMeeting = isOnlineMeeting.Value;
+            if (isOnlineMeeting is not null)
+                calendarEvent.IsOnlineMeeting = GraphResponseHelper.IsTruthy(isOnlineMeeting);
 
-            if (isAllDay.HasValue)
-                calendarEvent.IsAllDay = isAllDay.Value;
+            if (isAllDay is not null)
+                calendarEvent.IsAllDay = GraphResponseHelper.IsTruthy(isAllDay);
 
             await graphClient.Me.Events[eventId].PatchAsync(calendarEvent).ConfigureAwait(false);
             return GraphResponseHelper.FormatResponse(null);
@@ -267,12 +267,12 @@ public class CalendarTools(GraphServiceClient graphClient)
         [Description("The unique identifier of the event.")] string eventId,
         [Description("Response type: accept, decline, or tentative.")] string response,
         [Description("Optional comment to include with the response.")] string? comment = null,
-        [Description("Whether to send the response to the organizer (default: true).")] bool? sendResponse = null)
+        [Description("Whether to send the response to the organizer (default: true).")] object? sendResponse = null)
     {
         try
         {
             ArgumentNullException.ThrowIfNull(response);
-            var send = sendResponse ?? true;
+            var send = sendResponse is null || GraphResponseHelper.IsTruthy(sendResponse);
 
             switch (response.ToUpperInvariant())
             {

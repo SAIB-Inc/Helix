@@ -182,17 +182,11 @@ public class SharePointFileTools(GraphServiceClient graphClient)
     }
 
     [McpServerTool(Name = "download-drive-item", ReadOnly = true),
-     Description("Download a file from a SharePoint document library. "
-        + "The file is saved to a temporary directory on disk and the file path is returned. "
-        + "Set returnBase64 to true to return the file content as a base64-encoded string instead "
-        + "(useful when the caller cannot access the host filesystem). "
-        + "Set returnUrl to true to return a pre-authenticated short-lived download URL instead of the file content "
-        + "(useful when the caller needs to provide a direct download link to the user).")]
+     Description("Get a pre-authenticated short-lived download URL for a file in a SharePoint document library. "
+        + "Returns the file name and a direct download URL that can be used without additional authentication.")]
     public async Task<string> DownloadDriveItem(
         [Description("The drive ID.")] string driveId,
-        [Description("The item ID of the file to download.")] string itemId,
-        [Description("Return file content as base64 instead of saving to disk (default: false).")] bool? returnBase64 = null,
-        [Description("Return a pre-authenticated download URL instead of the file content (default: false).")] bool? returnUrl = null)
+        [Description("The item ID of the file to download.")] string itemId)
     {
         try
         {
@@ -200,47 +194,19 @@ public class SharePointFileTools(GraphServiceClient graphClient)
             if (item?.Name is null)
                 return GraphResponseHelper.FormatError("Could not retrieve item metadata.");
 
-            if (returnUrl == true)
+            if (item.AdditionalData.TryGetValue("@microsoft.graph.downloadUrl", out var urlObj)
+                && urlObj is string downloadUrl)
             {
-                if (item.AdditionalData.TryGetValue("@microsoft.graph.downloadUrl", out var urlObj)
-                    && urlObj is string downloadUrl)
-                {
-                    return $"Name: {item.Name}\n"
-                        + $"DownloadUrl: {downloadUrl}";
-                }
-
-                return GraphResponseHelper.FormatError("No download URL available for this item.");
-            }
-
-            var stream = await graphClient.Drives[driveId].Items[itemId].Content.GetAsync().ConfigureAwait(false);
-            if (stream is null)
-                return GraphResponseHelper.FormatError("No content available for this item.");
-
-            using var memoryStream = new MemoryStream();
-            await stream.CopyToAsync(memoryStream).ConfigureAwait(false);
-            var bytes = memoryStream.ToArray();
-
-            if (returnBase64 == true)
-            {
-                var base64 = Convert.ToBase64String(bytes);
-                var sizeDisplay = bytes.Length < 1024 ? $"{bytes.Length} bytes" : $"{bytes.Length / 1024} KB";
+                var sizeDisplay = item.Size is > 0
+                    ? item.Size < 1024 ? $"{item.Size} bytes" : $"{item.Size / 1024} KB"
+                    : "unknown";
 
                 return $"Name: {item.Name}\n"
                     + $"Size: {sizeDisplay}\n"
-                    + $"ContentBase64: {base64}";
+                    + $"DownloadUrl: {downloadUrl}";
             }
 
-            var tempDir = Path.Combine(Path.GetTempPath(), "helix-sharepoint");
-            Directory.CreateDirectory(tempDir);
-            var filePath = Path.Combine(tempDir, item.Name);
-
-            await File.WriteAllBytesAsync(filePath, bytes).ConfigureAwait(false);
-
-            var fileSizeDisplay = bytes.Length < 1024 ? $"{bytes.Length} bytes" : $"{bytes.Length / 1024} KB";
-
-            return $"File saved to: {filePath}\n"
-                + $"Size: {fileSizeDisplay}\n"
-                + $"Name: {item.Name}";
+            return GraphResponseHelper.FormatError("No download URL available for this item.");
         }
         catch (ODataError ex)
         {
