@@ -1,6 +1,9 @@
 using System.ComponentModel;
 using Helix.Core.Helpers;
 using Microsoft.Graph;
+using Microsoft.Graph.Me.Messages.Item.CreateForward;
+using Microsoft.Graph.Me.Messages.Item.CreateReply;
+using Microsoft.Graph.Me.Messages.Item.CreateReplyAll;
 using Microsoft.Graph.Me.Messages.Item.Send;
 using Microsoft.Graph.Models;
 using Microsoft.Graph.Models.ODataErrors;
@@ -50,6 +53,89 @@ public class MailDraftTools(GraphServiceClient graphClient)
                 message.Importance = MailTools.ParseImportance(importance);
 
             var draft = await graphClient.Me.Messages.PostAsync(message).ConfigureAwait(false);
+            return GraphResponseHelper.FormatResponse(draft);
+        }
+        catch (ODataError ex)
+        {
+            return GraphResponseHelper.FormatError(ex);
+        }
+    }
+
+    [McpServerTool(Name = "create-reply-draft"),
+     Description("Create a draft reply to an existing message (reply to sender only). "
+        + "The draft is created in the Drafts folder with correct threading and quoted original message. "
+        + "Use 'update-draft-message' to modify the draft, 'add-mail-attachment' to attach files, "
+        + "and 'send-draft-message' to send it. "
+        + "IMPORTANT: Always confirm with the user before calling this tool.")]
+    public async Task<string> CreateReplyDraft(
+        [Description("The unique identifier of the message to reply to.")] string messageId,
+        [Description("Reply body text to include above the quoted original message.")] string? comment = null)
+    {
+        try
+        {
+            var requestBody = new CreateReplyPostRequestBody();
+            if (!string.IsNullOrWhiteSpace(comment))
+                requestBody.Comment = comment;
+
+            var draft = await graphClient.Me.Messages[messageId].CreateReply
+                .PostAsync(requestBody).ConfigureAwait(false);
+            return GraphResponseHelper.FormatResponse(draft);
+        }
+        catch (ODataError ex)
+        {
+            return GraphResponseHelper.FormatError(ex);
+        }
+    }
+
+    [McpServerTool(Name = "create-reply-all-draft"),
+     Description("Create a draft reply-all to an existing message (reply to sender and all recipients). "
+        + "The draft is created in the Drafts folder with correct threading and quoted original message. "
+        + "Use 'update-draft-message' to modify the draft, 'add-mail-attachment' to attach files, "
+        + "and 'send-draft-message' to send it. "
+        + "IMPORTANT: Always confirm with the user before calling this tool.")]
+    public async Task<string> CreateReplyAllDraft(
+        [Description("The unique identifier of the message to reply to.")] string messageId,
+        [Description("Reply body text to include above the quoted original message.")] string? comment = null)
+    {
+        try
+        {
+            var requestBody = new CreateReplyAllPostRequestBody();
+            if (!string.IsNullOrWhiteSpace(comment))
+                requestBody.Comment = comment;
+
+            var draft = await graphClient.Me.Messages[messageId].CreateReplyAll
+                .PostAsync(requestBody).ConfigureAwait(false);
+            return GraphResponseHelper.FormatResponse(draft);
+        }
+        catch (ODataError ex)
+        {
+            return GraphResponseHelper.FormatError(ex);
+        }
+    }
+
+    [McpServerTool(Name = "create-forward-draft"),
+     Description("Create a draft forward of an existing message. "
+        + "The draft is created in the Drafts folder with the original message as quoted content. "
+        + "Use 'update-draft-message' to modify the draft, 'add-mail-attachment' to attach files, "
+        + "and 'send-draft-message' to send it. "
+        + "IMPORTANT: Always confirm with the user before calling this tool.")]
+    public async Task<string> CreateForwardDraft(
+        [Description("The unique identifier of the message to forward.")] string messageId,
+        [Description("Comma-separated email addresses to forward to.")] string? toRecipients = null,
+        [Description("Comment text to include above the forwarded message.")] string? comment = null)
+    {
+        try
+        {
+            var requestBody = new CreateForwardPostRequestBody();
+            if (!string.IsNullOrWhiteSpace(comment))
+                requestBody.Comment = comment;
+
+            var recipients = MailTools.ParseRecipients(toRecipients);
+            if (recipients.Count > 0)
+                requestBody.ToRecipients = recipients;
+
+            var draft = await graphClient.Me.Messages[messageId].CreateForward
+                .PostAsync(requestBody).ConfigureAwait(false);
             return GraphResponseHelper.FormatResponse(draft);
         }
         catch (ODataError ex)
