@@ -1,14 +1,19 @@
 using System.ComponentModel;
 using Helix.Core.Helpers;
 using Microsoft.Graph;
+using Microsoft.Graph.Models;
 using Microsoft.Graph.Models.ODataErrors;
 using ModelContextProtocol.Server;
 
 namespace Helix.Tools.Mail;
 
+/// <summary>
+/// MCP tools for listing mail folders and folder messages via Microsoft Graph.
+/// </summary>
 [McpServerToolType]
 public class MailFolderTools(GraphServiceClient graphClient)
 {
+    /// <inheritdoc />
     [McpServerTool(Name = "list-mail-folders", ReadOnly = true),
      Description("List mail folders in the signed-in user's mailbox (Inbox, Drafts, Sent Items, etc.). "
         + "Returns folder ID, display name, unread count, and total count.")]
@@ -16,7 +21,7 @@ public class MailFolderTools(GraphServiceClient graphClient)
     {
         try
         {
-            var folders = await graphClient.Me.MailFolders.GetAsync(config =>
+            MailFolderCollectionResponse? folders = await graphClient.Me.MailFolders.GetAsync(config =>
             {
                 config.QueryParameters.Select = ["id", "displayName", "parentFolderId", "unreadItemCount", "totalItemCount"];
             }).ConfigureAwait(false);
@@ -29,6 +34,7 @@ public class MailFolderTools(GraphServiceClient graphClient)
         }
     }
 
+    /// <inheritdoc />
     [McpServerTool(Name = "list-mail-folder-messages", ReadOnly = true),
      Description("List messages in a specific mail folder. "
         + "Use 'list-mail-folders' to get folder IDs, or use well-known names: inbox, drafts, sentitems, deleteditems, archive, junkemail. "
@@ -44,20 +50,28 @@ public class MailFolderTools(GraphServiceClient graphClient)
     {
         try
         {
-            var messages = await graphClient.Me.MailFolders[folderId].Messages.GetAsync(config =>
+            MessageCollectionResponse? messages = await graphClient.Me.MailFolders[folderId].Messages.GetAsync(config =>
             {
                 config.QueryParameters.Top = top ?? 10;
                 config.QueryParameters.Select = !string.IsNullOrEmpty(select)
                     ? select.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                     : ["id", "subject", "from", "receivedDateTime", "isRead", "bodyPreview"];
                 if (!string.IsNullOrEmpty(filter))
+                {
                     config.QueryParameters.Filter = filter;
+                }
                 if (!string.IsNullOrEmpty(search))
+                {
                     config.QueryParameters.Search = search;
+                }
                 if (!string.IsNullOrEmpty(orderby))
+                {
                     config.QueryParameters.Orderby = [orderby];
+                }
                 if (skip.HasValue)
+                {
                     config.QueryParameters.Skip = skip.Value;
+                }
             }).ConfigureAwait(false);
 
             return GraphResponseHelper.FormatResponse(messages);

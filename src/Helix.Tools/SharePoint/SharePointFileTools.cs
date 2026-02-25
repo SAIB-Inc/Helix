@@ -1,15 +1,20 @@
 using System.ComponentModel;
 using Helix.Core.Helpers;
 using Microsoft.Graph;
+using Microsoft.Graph.Drives.Item.SearchWithQ;
 using Microsoft.Graph.Models;
 using Microsoft.Graph.Models.ODataErrors;
 using ModelContextProtocol.Server;
 
 namespace Helix.Tools.SharePoint;
 
+/// <summary>
+/// MCP tools for managing files and folders in SharePoint document libraries via Microsoft Graph.
+/// </summary>
 [McpServerToolType]
 public class SharePointFileTools(GraphServiceClient graphClient)
 {
+    /// <inheritdoc />
     [McpServerTool(Name = "list-site-drives", ReadOnly = true),
      Description("List all document libraries (drives) in a SharePoint site. "
         + "Returns drive ID, name, URL, and quota information.")]
@@ -18,7 +23,7 @@ public class SharePointFileTools(GraphServiceClient graphClient)
     {
         try
         {
-            var drives = await graphClient.Sites[siteId].Drives.GetAsync(config =>
+            DriveCollectionResponse? drives = await graphClient.Sites[siteId].Drives.GetAsync(config =>
             {
                 config.QueryParameters.Select = ["id", "name", "webUrl", "driveType", "quota"];
             }).ConfigureAwait(false);
@@ -31,6 +36,7 @@ public class SharePointFileTools(GraphServiceClient graphClient)
         }
     }
 
+    /// <inheritdoc />
     [McpServerTool(Name = "list-drive-children", ReadOnly = true),
      Description("List files and folders in a SharePoint document library. "
         + "Omit itemId to list root folder contents, or provide an itemId to list a subfolder's contents.")]
@@ -43,7 +49,7 @@ public class SharePointFileTools(GraphServiceClient graphClient)
         {
             DriveItemCollectionResponse? children;
 
-            var folderId = string.IsNullOrWhiteSpace(itemId) ? "root" : itemId;
+            string folderId = string.IsNullOrWhiteSpace(itemId) ? "root" : itemId;
             children = await graphClient.Drives[driveId].Items[folderId].Children.GetAsync(config =>
             {
                 config.QueryParameters.Top = top ?? 20;
@@ -58,6 +64,7 @@ public class SharePointFileTools(GraphServiceClient graphClient)
         }
     }
 
+    /// <inheritdoc />
     [McpServerTool(Name = "search-drive-items", ReadOnly = true),
      Description("Search for files and folders in a SharePoint document library by name or content. "
         + "Uses Microsoft Search to find items matching the query across the entire drive. "
@@ -69,7 +76,7 @@ public class SharePointFileTools(GraphServiceClient graphClient)
     {
         try
         {
-            var results = await graphClient.Drives[driveId].SearchWithQ(query).GetAsSearchWithQGetResponseAsync(config =>
+            SearchWithQGetResponse? results = await graphClient.Drives[driveId].SearchWithQ(query).GetAsSearchWithQGetResponseAsync(config =>
             {
                 config.QueryParameters.Top = top ?? 20;
                 config.QueryParameters.Select = ["id", "name", "size", "webUrl", "folder", "file", "lastModifiedDateTime", "createdDateTime", "parentReference"];
@@ -83,6 +90,7 @@ public class SharePointFileTools(GraphServiceClient graphClient)
         }
     }
 
+    /// <inheritdoc />
     [McpServerTool(Name = "get-drive-item", ReadOnly = true),
      Description("Get metadata for a specific file or folder in a SharePoint document library.")]
     public async Task<string> GetDriveItem(
@@ -91,7 +99,7 @@ public class SharePointFileTools(GraphServiceClient graphClient)
     {
         try
         {
-            var item = await graphClient.Drives[driveId].Items[itemId].GetAsync().ConfigureAwait(false);
+            DriveItem? item = await graphClient.Drives[driveId].Items[itemId].GetAsync().ConfigureAwait(false);
             return GraphResponseHelper.FormatResponse(item);
         }
         catch (ODataError ex)
@@ -100,6 +108,7 @@ public class SharePointFileTools(GraphServiceClient graphClient)
         }
     }
 
+    /// <inheritdoc />
     [McpServerTool(Name = "create-drive-folder"),
      Description("Create a new folder in a SharePoint document library. "
         + "IMPORTANT: Always confirm with the user before calling this tool.")]
@@ -110,7 +119,7 @@ public class SharePointFileTools(GraphServiceClient graphClient)
     {
         try
         {
-            var folder = new DriveItem
+            DriveItem folder = new()
             {
                 Name = folderName,
                 Folder = new Folder(),
@@ -120,8 +129,8 @@ public class SharePointFileTools(GraphServiceClient graphClient)
                 }
             };
 
-            var parentId = string.IsNullOrWhiteSpace(parentItemId) ? "root" : parentItemId;
-            var created = await graphClient.Drives[driveId].Items[parentId].Children.PostAsync(folder).ConfigureAwait(false);
+            string parentId = string.IsNullOrWhiteSpace(parentItemId) ? "root" : parentItemId;
+            DriveItem? created = await graphClient.Drives[driveId].Items[parentId].Children.PostAsync(folder).ConfigureAwait(false);
             return GraphResponseHelper.FormatResponse(created);
         }
         catch (ODataError ex)
@@ -130,6 +139,7 @@ public class SharePointFileTools(GraphServiceClient graphClient)
         }
     }
 
+    /// <inheritdoc />
     [McpServerTool(Name = "upload-drive-item"),
      Description("Upload a file to a SharePoint document library. "
         + "Provide either a file path on the host filesystem or base64-encoded content. "
@@ -160,7 +170,9 @@ public class SharePointFileTools(GraphServiceClient graphClient)
             else if (!string.IsNullOrWhiteSpace(filePath))
             {
                 if (!File.Exists(filePath))
+                {
                     return GraphResponseHelper.FormatError($"File not found: {filePath}");
+                }
 
                 fileBytes = await File.ReadAllBytesAsync(filePath).ConfigureAwait(false);
             }
@@ -169,9 +181,9 @@ public class SharePointFileTools(GraphServiceClient graphClient)
                 return GraphResponseHelper.FormatError("Either 'filePath' or 'contentBase64' must be provided.");
             }
 
-            var parentId = string.IsNullOrWhiteSpace(parentItemId) ? "root" : parentItemId;
-            using var stream = new MemoryStream(fileBytes);
-            var uploaded = await graphClient.Drives[driveId].Items[parentId]
+            string parentId = string.IsNullOrWhiteSpace(parentItemId) ? "root" : parentItemId;
+            using MemoryStream stream = new(fileBytes);
+            DriveItem? uploaded = await graphClient.Drives[driveId].Items[parentId]
                 .ItemWithPath(fileName).Content
                 .PutAsync(stream).ConfigureAwait(false);
 
@@ -183,6 +195,7 @@ public class SharePointFileTools(GraphServiceClient graphClient)
         }
     }
 
+    /// <inheritdoc />
     [McpServerTool(Name = "download-drive-item", ReadOnly = true),
      Description("Get a pre-authenticated short-lived download URL for a file in a SharePoint document library. "
         + "Returns the file name and a direct download URL that can be used without additional authentication.")]
@@ -192,14 +205,16 @@ public class SharePointFileTools(GraphServiceClient graphClient)
     {
         try
         {
-            var item = await graphClient.Drives[driveId].Items[itemId].GetAsync().ConfigureAwait(false);
+            DriveItem? item = await graphClient.Drives[driveId].Items[itemId].GetAsync().ConfigureAwait(false);
             if (item?.Name is null)
+            {
                 return GraphResponseHelper.FormatError("Could not retrieve item metadata.");
+            }
 
-            if (item.AdditionalData.TryGetValue("@microsoft.graph.downloadUrl", out var urlObj)
+            if (item.AdditionalData.TryGetValue("@microsoft.graph.downloadUrl", out object? urlObj)
                 && urlObj is string downloadUrl)
             {
-                var sizeDisplay = item.Size is > 0
+                string sizeDisplay = item.Size is > 0
                     ? item.Size < 1024 ? $"{item.Size} bytes" : $"{item.Size / 1024} KB"
                     : "unknown";
 

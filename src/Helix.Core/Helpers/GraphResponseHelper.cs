@@ -5,6 +5,9 @@ using Microsoft.Graph.Models.ODataErrors;
 
 namespace Helix.Core.Helpers;
 
+/// <summary>
+/// Provides formatting helpers for Microsoft Graph API responses and errors.
+/// </summary>
 public static class GraphResponseHelper
 {
     private static readonly JsonSerializerOptions SerializerOptions = new()
@@ -23,8 +26,8 @@ public static class GraphResponseHelper
     {
         ArgumentNullException.ThrowIfNull(error);
 
-        var code = error.Error?.Code ?? "UnknownError";
-        var message = error.Error?.Message ?? error.Message;
+        string code = error.Error?.Code ?? "UnknownError";
+        string? message = error.Error?.Message ?? error.Message;
         return JsonSerializer.Serialize(new { error = true, code, message }, SerializerOptions);
     }
 
@@ -42,9 +45,11 @@ public static class GraphResponseHelper
     public static string FormatResponse(object? data)
     {
         if (data is null)
+        {
             return JsonSerializer.Serialize(new { success = true }, SerializerOptions);
+        }
 
-        var json = JsonSerializer.Serialize(data, SerializerOptions);
+        string json = JsonSerializer.Serialize(data, SerializerOptions);
         return StripODataProperties(json);
     }
 
@@ -52,12 +57,13 @@ public static class GraphResponseHelper
     {
         try
         {
-            var node = JsonNode.Parse(json);
+            JsonNode? node = JsonNode.Parse(json);
             if (node is JsonObject obj)
             {
                 StripODataFromObject(obj);
                 return obj.ToJsonString(SerializerOptions);
             }
+
             return json;
         }
         catch (JsonException)
@@ -71,39 +77,47 @@ public static class GraphResponseHelper
     /// This works around MCP clients that send boolean values as JSON strings
     /// instead of JSON booleans (e.g. "true" instead of true).
     /// </summary>
-    public static bool IsTruthy(object? value) => value switch
+    public static bool IsTruthy(object? value)
     {
-        bool b => b,
-        string s => string.Equals(s, "true", StringComparison.OrdinalIgnoreCase),
-        JsonElement { ValueKind: JsonValueKind.True } => true,
-        JsonElement { ValueKind: JsonValueKind.False } => false,
-        JsonElement je when je.ValueKind == JsonValueKind.String =>
-            string.Equals(je.GetString(), "true", StringComparison.OrdinalIgnoreCase),
-        _ => false
-    };
+        return value switch
+        {
+            bool b => b,
+            string s => string.Equals(s, "true", StringComparison.OrdinalIgnoreCase),
+            JsonElement { ValueKind: JsonValueKind.True } => true,
+            JsonElement { ValueKind: JsonValueKind.False } => false,
+            JsonElement je when je.ValueKind == JsonValueKind.String =>
+                string.Equals(je.GetString(), "true", StringComparison.OrdinalIgnoreCase),
+            _ => false
+        };
+    }
 
     private static void StripODataFromObject(JsonObject obj)
     {
-        var keysToRemove = obj
+        List<string> keysToRemove = [.. obj
             .Where(kvp => kvp.Key.StartsWith("@odata.", StringComparison.OrdinalIgnoreCase)
                        || kvp.Key.StartsWith("odata.", StringComparison.OrdinalIgnoreCase)
                        || kvp.Key is "backingStore" or "odataType" or "additionalData")
-            .Select(kvp => kvp.Key)
-            .ToList();
+            .Select(kvp => kvp.Key)];
 
-        foreach (var key in keysToRemove)
-            obj.Remove(key);
+        foreach (string key in keysToRemove)
+        {
+            _ = obj.Remove(key);
+        }
 
-        foreach (var kvp in obj)
+        foreach (KeyValuePair<string, JsonNode?> kvp in obj)
         {
             if (kvp.Value is JsonObject childObj)
+            {
                 StripODataFromObject(childObj);
+            }
             else if (kvp.Value is JsonArray arr)
             {
-                foreach (var item in arr)
+                foreach (JsonNode? item in arr)
                 {
                     if (item is JsonObject arrObj)
+                    {
                         StripODataFromObject(arrObj);
+                    }
                 }
             }
         }

@@ -7,7 +7,7 @@ using LogLevel = Microsoft.Extensions.Logging.LogLevel;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using ModelContextProtocol.Server;
+using Microsoft.Identity.Client;
 using dotenv.net;
 
 // Load .env file before anything else
@@ -20,7 +20,7 @@ if (args.Length > 0)
     {
         case "--VERSION":
         case "-V":
-            var version = System.Reflection.CustomAttributeExtensions
+            string version = System.Reflection.CustomAttributeExtensions
                 .GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>(typeof(Program).Assembly)?
                 .InformationalVersion ?? "0.0.0-dev";
             Console.WriteLine($"helix {version}");
@@ -31,11 +31,13 @@ if (args.Length > 0)
         case "LOGOUT":
             await HandleLogoutAsync(args).ConfigureAwait(false);
             return;
+        default:
+            break;
     }
 }
 
 // Start MCP server (stdio transport)
-var builder = Host.CreateApplicationBuilder(args);
+HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
 
 // Clear default logging providers and route all logs to stderr
 // so stdout stays clean for MCP JSON-RPC
@@ -59,8 +61,8 @@ await builder.Build().RunAsync().ConfigureAwait(false);
 
 static async Task HandleLoginAsync(string[] args)
 {
-    var config = BuildConfiguration(args);
-    var options = new HelixOptions();
+    IConfiguration config = BuildConfiguration(args);
+    HelixOptions options = new();
     config.GetSection(HelixOptions.SectionName).Bind(options);
 
     if (string.IsNullOrEmpty(options.ClientId))
@@ -69,12 +71,12 @@ static async Task HandleLoginAsync(string[] args)
         Environment.Exit(1);
     }
 
-    var msalApp = await MsalClientFactory.CreateAsync(options).ConfigureAwait(false);
-    var scopes = CloudConfiguration.GetGraphScopes(options.CloudType);
+    IPublicClientApplication msalApp = await MsalClientFactory.CreateAsync(options).ConfigureAwait(false);
+    string[] scopes = CloudConfiguration.GetGraphScopes(options.CloudType);
 
     await Console.Error.WriteLineAsync("Authenticating with Microsoft...").ConfigureAwait(false);
 
-    var result = await msalApp.AcquireTokenWithDeviceCode(scopes, async deviceCodeResult =>
+    AuthenticationResult result = await msalApp.AcquireTokenWithDeviceCode(scopes, async deviceCodeResult =>
     {
         await Console.Error.WriteLineAsync(deviceCodeResult.Message).ConfigureAwait(false);
     }).ExecuteAsync().ConfigureAwait(false);
@@ -85,8 +87,8 @@ static async Task HandleLoginAsync(string[] args)
 
 static async Task HandleLogoutAsync(string[] args)
 {
-    var config = BuildConfiguration(args);
-    var options = new HelixOptions();
+    IConfiguration config = BuildConfiguration(args);
+    HelixOptions options = new();
     config.GetSection(HelixOptions.SectionName).Bind(options);
 
     if (string.IsNullOrEmpty(options.ClientId))
@@ -95,10 +97,10 @@ static async Task HandleLogoutAsync(string[] args)
         Environment.Exit(1);
     }
 
-    var msalApp = await MsalClientFactory.CreateAsync(options).ConfigureAwait(false);
-    var accounts = await msalApp.GetAccountsAsync().ConfigureAwait(false);
+    IPublicClientApplication msalApp = await MsalClientFactory.CreateAsync(options).ConfigureAwait(false);
+    IEnumerable<IAccount> accounts = await msalApp.GetAccountsAsync().ConfigureAwait(false);
 
-    foreach (var account in accounts)
+    foreach (IAccount account in accounts)
     {
         await msalApp.RemoveAsync(account).ConfigureAwait(false);
         await Console.Error.WriteLineAsync($"Removed account: {account.Username}").ConfigureAwait(false);

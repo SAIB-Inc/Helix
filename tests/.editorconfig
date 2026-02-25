@@ -1,0 +1,16 @@
+# Test project overrides
+# Inherits from root .editorconfig; these rules conflict with xUnit requirements.
+
+[*.cs]
+
+# xUnit requires test classes to be public (xUnit1000).
+# CA1515 wants to make them internal ("types in apps can be internal") — disable it.
+dotnet_diagnostic.CA1515.severity = none
+
+# xUnit forbids ConfigureAwait(false) in test methods (xUnit1030).
+# CA2007 wants to add it — disable it here.
+dotnet_diagnostic.CA2007.severity = none
+
+# Test classes/methods don't need XML documentation comments.
+# CS1591 fires because GenerateDocumentationFile is enabled globally.
+dotnet_diagnostic.CS1591.severity = none

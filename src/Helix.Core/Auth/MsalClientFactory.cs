@@ -8,13 +8,16 @@ namespace Helix.Core.Auth;
 /// </summary>
 public static class MsalClientFactory
 {
+    /// <summary>
+    /// Creates a configured <see cref="IPublicClientApplication"/> with persistent token cache.
+    /// </summary>
     public static Task<IPublicClientApplication> CreateAsync(HelixOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
 
-        var authority = new Uri(CloudConfiguration.GetAuthority(options.CloudType, options.TenantId));
+        Uri authority = new(CloudConfiguration.GetAuthority(options.CloudType, options.TenantId));
 
-        var app = PublicClientApplicationBuilder
+        IPublicClientApplication app = PublicClientApplicationBuilder
             .Create(options.ClientId)
             .WithAuthority(authority)
             .Build();

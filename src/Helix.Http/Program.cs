@@ -1,11 +1,10 @@
 using dotenv.net;
 using Helix.Core.Extensions;
 using Helix.Tools.Users;
-using ModelContextProtocol.Server;
 
 DotEnv.Load();
 
-var builder = WebApplication.CreateBuilder(args);
+WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
 builder.Configuration.AddEnvironmentVariables();
 
@@ -15,7 +14,7 @@ builder.Services
     .WithHttpTransport()
     .WithToolsFromAssembly(typeof(UserTools).Assembly);
 
-var app = builder.Build();
+WebApplication app = builder.Build();
 
 app.MapMcp();
 

@@ -1,25 +1,46 @@
 namespace Helix.Core.Configuration;
 
+/// <summary>
+/// Provides cloud-specific endpoint and scope configuration for Microsoft Graph.
+/// </summary>
 public static class CloudConfiguration
 {
-    public static string GetAuthority(CloudType cloudType, string tenantId) => cloudType switch
+    /// <summary>
+    /// Returns the OAuth2 authority URL for the given cloud and tenant.
+    /// </summary>
+    public static string GetAuthority(CloudType cloudType, string tenantId)
     {
-        CloudType.Global => $"https://login.microsoftonline.com/{tenantId}",
-        CloudType.China => $"https://login.chinacloudapi.cn/{tenantId}",
-        _ => throw new ArgumentOutOfRangeException(nameof(cloudType))
-    };
+        return cloudType switch
+        {
+            CloudType.Global => $"https://login.microsoftonline.com/{tenantId}",
+            CloudType.China => $"https://login.chinacloudapi.cn/{tenantId}",
+            _ => throw new ArgumentOutOfRangeException(nameof(cloudType))
+        };
+    }
 
-    public static string GetGraphEndpoint(CloudType cloudType) => cloudType switch
+    /// <summary>
+    /// Returns the Microsoft Graph base endpoint URL for the given cloud.
+    /// </summary>
+    public static string GetGraphEndpoint(CloudType cloudType)
     {
-        CloudType.Global => "https://graph.microsoft.com/v1.0",
-        CloudType.China => "https://microsoftgraph.chinacloudapi.cn/v1.0",
-        _ => throw new ArgumentOutOfRangeException(nameof(cloudType))
-    };
+        return cloudType switch
+        {
+            CloudType.Global => "https://graph.microsoft.com/v1.0",
+            CloudType.China => "https://microsoftgraph.chinacloudapi.cn/v1.0",
+            _ => throw new ArgumentOutOfRangeException(nameof(cloudType))
+        };
+    }
 
-    public static string[] GetGraphScopes(CloudType cloudType) => cloudType switch
+    /// <summary>
+    /// Returns the default Graph API scopes for the given cloud.
+    /// </summary>
+    public static string[] GetGraphScopes(CloudType cloudType)
     {
-        CloudType.Global => ["https://graph.microsoft.com/.default"],
-        CloudType.China => ["https://microsoftgraph.chinacloudapi.cn/.default"],
-        _ => throw new ArgumentOutOfRangeException(nameof(cloudType))
-    };
+        return cloudType switch
+        {
+            CloudType.Global => ["https://graph.microsoft.com/.default"],
+            CloudType.China => ["https://microsoftgraph.chinacloudapi.cn/.default"],
+            _ => throw new ArgumentOutOfRangeException(nameof(cloudType))
+        };
+    }
 }

@@ -5,14 +5,18 @@ using ModelContextProtocol.Server;
 
 namespace Helix.Tools.Utilities;
 
+/// <summary>
+/// MCP tools for retrieving Helix server system information.
+/// </summary>
 [McpServerToolType]
 public sealed class SystemTools
 {
+    /// <inheritdoc />
     [McpServerTool(Name = "get-version", ReadOnly = true),
      Description("Get the current Helix MCP server version.")]
     public static string GetVersion()
     {
-        var version = typeof(SystemTools).Assembly
+        string version = typeof(SystemTools).Assembly
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
             .InformationalVersion ?? "0.0.0-dev";
 

@@ -12,10 +12,10 @@ public sealed class UserToolsTests(IntegrationFixture fixture)
     [Fact]
     public async Task GetCurrentUserReturnsUserProfile()
     {
-        var result = await _tools.GetCurrentUser();
+        string result = await _tools.GetCurrentUser();
 
         IntegrationFixture.AssertSuccess(result);
-        using var doc = JsonDocument.Parse(result);
+        using JsonDocument doc = JsonDocument.Parse(result);
         Assert.True(doc.RootElement.TryGetProperty("displayName", out _));
         Assert.True(doc.RootElement.TryGetProperty("mail", out _) ||
                     doc.RootElement.TryGetProperty("userPrincipalName", out _));

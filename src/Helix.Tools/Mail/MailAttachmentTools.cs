@@ -7,9 +7,13 @@ using ModelContextProtocol.Server;
 
 namespace Helix.Tools.Mail;
 
+/// <summary>
+/// MCP tools for listing, downloading, adding, and deleting mail attachments via Microsoft Graph.
+/// </summary>
 [McpServerToolType]
 public class MailAttachmentTools(GraphServiceClient graphClient)
 {
+    /// <inheritdoc />
     [McpServerTool(Name = "list-mail-attachments", ReadOnly = true),
      Description("List all attachments on a mail message.")]
     public async Task<string> ListMailAttachments(
@@ -17,7 +21,7 @@ public class MailAttachmentTools(GraphServiceClient graphClient)
     {
         try
         {
-            var attachments = await graphClient.Me.Messages[messageId].Attachments.GetAsync(config =>
+            AttachmentCollectionResponse? attachments = await graphClient.Me.Messages[messageId].Attachments.GetAsync(config =>
             {
                 config.QueryParameters.Select = ["id", "name", "contentType", "size"];
             }).ConfigureAwait(false);
@@ -30,6 +34,7 @@ public class MailAttachmentTools(GraphServiceClient graphClient)
         }
     }
 
+    /// <inheritdoc />
     [McpServerTool(Name = "get-mail-attachment", ReadOnly = true),
      Description("Get a specific attachment from a mail message. "
         + "Returns the file name, size, content type, and base64-encoded file content.")]
@@ -39,15 +44,15 @@ public class MailAttachmentTools(GraphServiceClient graphClient)
     {
         try
         {
-            var attachment = await graphClient.Me.Messages[messageId].Attachments[attachmentId].GetAsync().ConfigureAwait(false);
+            Attachment? attachment = await graphClient.Me.Messages[messageId].Attachments[attachmentId].GetAsync().ConfigureAwait(false);
 
             if (attachment is FileAttachment { ContentBytes.Length: > 0 } fileAttachment)
             {
-                var name = fileAttachment.Name ?? $"attachment-{attachmentId}";
-                var sizeBytes = fileAttachment.ContentBytes.Length;
-                var sizeDisplay = sizeBytes < 1024 ? $"{sizeBytes} bytes" : $"{sizeBytes / 1024} KB";
-                var contentType = fileAttachment.ContentType ?? "application/octet-stream";
-                var base64 = Convert.ToBase64String(fileAttachment.ContentBytes);
+                string name = fileAttachment.Name ?? $"attachment-{attachmentId}";
+                int sizeBytes = fileAttachment.ContentBytes.Length;
+                string sizeDisplay = sizeBytes < 1024 ? $"{sizeBytes} bytes" : $"{sizeBytes / 1024} KB";
+                string contentType = fileAttachment.ContentType ?? "application/octet-stream";
+                string base64 = Convert.ToBase64String(fileAttachment.ContentBytes);
 
                 return $"Name: {name}\n"
                     + $"Size: {sizeDisplay}\n"
@@ -63,6 +68,7 @@ public class MailAttachmentTools(GraphServiceClient graphClient)
         }
     }
 
+    /// <inheritdoc />
     [McpServerTool(Name = "add-mail-attachment"),
      Description("Add a file attachment to a mail message (typically a draft). "
         + "Reads the file from the given path on disk — do NOT pass file content inline. "
@@ -96,7 +102,9 @@ public class MailAttachmentTools(GraphServiceClient graphClient)
             else if (!string.IsNullOrWhiteSpace(filePath))
             {
                 if (!File.Exists(filePath))
+                {
                     return GraphResponseHelper.FormatError($"File not found: {filePath}");
+                }
 
                 fileBytes = await File.ReadAllBytesAsync(filePath).ConfigureAwait(false);
                 attachmentName = Path.GetFileName(filePath);
@@ -106,7 +114,7 @@ public class MailAttachmentTools(GraphServiceClient graphClient)
                 return GraphResponseHelper.FormatError("Either 'filePath' or 'contentBase64' must be provided.");
             }
 
-            var attachment = new FileAttachment
+            FileAttachment attachment = new()
             {
                 OdataType = "#microsoft.graph.fileAttachment",
                 Name = attachmentName,
@@ -114,7 +122,7 @@ public class MailAttachmentTools(GraphServiceClient graphClient)
                 ContentBytes = fileBytes
             };
 
-            await graphClient.Me.Messages[messageId].Attachments.PostAsync(attachment).ConfigureAwait(false);
+            _ = await graphClient.Me.Messages[messageId].Attachments.PostAsync(attachment).ConfigureAwait(false);
             return GraphResponseHelper.FormatResponse(null);
         }
         catch (ODataError ex)
@@ -123,6 +131,7 @@ public class MailAttachmentTools(GraphServiceClient graphClient)
         }
     }
 
+    /// <inheritdoc />
     [McpServerTool(Name = "delete-mail-attachment"),
      Description("Delete an attachment from a mail message. "
         + "IMPORTANT: Always confirm with the user before calling this tool.")]

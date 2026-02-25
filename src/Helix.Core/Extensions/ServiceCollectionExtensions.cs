@@ -6,17 +6,23 @@ using Microsoft.Identity.Client;
 
 namespace Helix.Core.Extensions;
 
+/// <summary>
+/// Extension methods to register Helix core services with dependency injection.
+/// </summary>
 public static class ServiceCollectionExtensions
 {
+    /// <summary>
+    /// Adds Helix authentication, Graph client factory, and related services to the container.
+    /// </summary>
     public static IServiceCollection AddHelixCore(
         this IServiceCollection services,
         IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(configuration);
 
-        services.Configure<HelixOptions>(configuration.GetSection(HelixOptions.SectionName));
+        _ = services.Configure<HelixOptions>(configuration.GetSection(HelixOptions.SectionName));
 
-        var options = new HelixOptions();
+        HelixOptions options = new();
         configuration.GetSection(HelixOptions.SectionName).Bind(options);
 
         // Build MSAL app if we have a client ID (needed for cached token auth)
@@ -24,12 +30,12 @@ public static class ServiceCollectionExtensions
         if (!string.IsNullOrEmpty(options.ClientId))
         {
             msalApp = MsalClientFactory.CreateAsync(options).GetAwaiter().GetResult();
-            services.AddSingleton(msalApp);
+            _ = services.AddSingleton(msalApp);
         }
 
-        var factory = new HelixGraphClientFactory(options, msalApp);
-        services.AddSingleton(factory);
-        services.AddSingleton(_ => factory.Create());
+        HelixGraphClientFactory factory = new(options, msalApp);
+        _ = services.AddSingleton(factory);
+        _ = services.AddSingleton(_ => factory.Create());
 
         return services;
     }

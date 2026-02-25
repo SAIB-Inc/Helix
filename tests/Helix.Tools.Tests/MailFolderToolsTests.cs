@@ -12,48 +12,51 @@ public sealed class MailFolderToolsTests(IntegrationFixture fixture)
     [Fact]
     public async Task ListMailFoldersReturnsFolders()
     {
-        var result = await _tools.ListMailFolders();
+        string result = await _tools.ListMailFolders();
 
-        var values = IntegrationFixture.AssertHasValues(result);
+        JsonElement values = IntegrationFixture.AssertHasValues(result);
         Assert.True(values.GetArrayLength() > 0);
 
         // Should contain well-known folders
-        var folderNames = new List<string>();
-        foreach (var folder in values.EnumerateArray())
+        List<string> folderNames = [];
+        foreach (JsonElement folder in values.EnumerateArray())
         {
-            if (folder.TryGetProperty("displayName", out var name))
+            if (folder.TryGetProperty("displayName", out JsonElement name))
+            {
                 folderNames.Add(name.GetString()!);
+            }
         }
+
         Assert.Contains("Inbox", folderNames);
     }
 
     [Fact]
     public async Task ListMailFolderMessagesInboxReturnsMessages()
     {
-        var result = await _tools.ListMailFolderMessages("inbox", top: 2);
+        string result = await _tools.ListMailFolderMessages("inbox", top: 2);
 
         IntegrationFixture.AssertSuccess(result);
-        using var doc = JsonDocument.Parse(result);
+        using JsonDocument doc = JsonDocument.Parse(result);
         Assert.True(doc.RootElement.TryGetProperty("value", out _));
     }
 
     [Fact]
     public async Task ListMailFolderMessagesSentItemsReturnsMessages()
     {
-        var result = await _tools.ListMailFolderMessages("sentitems", top: 2);
+        string result = await _tools.ListMailFolderMessages("sentitems", top: 2);
 
         IntegrationFixture.AssertSuccess(result);
-        using var doc = JsonDocument.Parse(result);
+        using JsonDocument doc = JsonDocument.Parse(result);
         Assert.True(doc.RootElement.TryGetProperty("value", out _));
     }
 
     [Fact]
     public async Task ListMailFolderMessagesDraftsReturnsMessages()
     {
-        var result = await _tools.ListMailFolderMessages("drafts", top: 2);
+        string result = await _tools.ListMailFolderMessages("drafts", top: 2);
 
         IntegrationFixture.AssertSuccess(result);
-        using var doc = JsonDocument.Parse(result);
+        using JsonDocument doc = JsonDocument.Parse(result);
         Assert.True(doc.RootElement.TryGetProperty("value", out _));
     }
 }

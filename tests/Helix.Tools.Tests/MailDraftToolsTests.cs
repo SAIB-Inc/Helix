@@ -16,13 +16,13 @@ public sealed class MailDraftToolsTests(IntegrationFixture fixture)
         string? draftId = null;
         try
         {
-            var result = await _draftTools.CreateDraftMessage(
+            string result = await _draftTools.CreateDraftMessage(
                 subject: "Helix Draft Test - Create",
                 body: "Draft body",
                 toRecipients: "clark@saib.dev");
 
             IntegrationFixture.AssertSuccess(result);
-            using var doc = JsonDocument.Parse(result);
+            using JsonDocument doc = JsonDocument.Parse(result);
             draftId = doc.RootElement.GetProperty("id").GetString();
             Assert.NotNull(draftId);
             Assert.Equal("Helix Draft Test - Create", doc.RootElement.GetProperty("subject").GetString());
@@ -30,7 +30,9 @@ public sealed class MailDraftToolsTests(IntegrationFixture fixture)
         finally
         {
             if (draftId is not null)
-                await _mailTools.DeleteMailMessage(draftId);
+            {
+                _ = await _mailTools.DeleteMailMessage(draftId);
+            }
         }
     }
 
@@ -40,27 +42,29 @@ public sealed class MailDraftToolsTests(IntegrationFixture fixture)
         string? draftId = null;
         try
         {
-            var createResult = await _draftTools.CreateDraftMessage(
+            string createResult = await _draftTools.CreateDraftMessage(
                 subject: "Helix Draft Test - Update",
                 body: "Original body",
                 toRecipients: "clark@saib.dev");
 
-            using var createDoc = JsonDocument.Parse(createResult);
+            using JsonDocument createDoc = JsonDocument.Parse(createResult);
             draftId = createDoc.RootElement.GetProperty("id").GetString()!;
 
-            var updateResult = await _draftTools.UpdateDraftMessage(
+            string updateResult = await _draftTools.UpdateDraftMessage(
                 messageId: draftId,
                 subject: "Helix Draft Test - Updated Subject",
                 body: "Updated body content");
 
             IntegrationFixture.AssertSuccess(updateResult);
-            using var updateDoc = JsonDocument.Parse(updateResult);
+            using JsonDocument updateDoc = JsonDocument.Parse(updateResult);
             Assert.Equal("Helix Draft Test - Updated Subject", updateDoc.RootElement.GetProperty("subject").GetString());
         }
         finally
         {
             if (draftId is not null)
-                await _mailTools.DeleteMailMessage(draftId);
+            {
+                _ = await _mailTools.DeleteMailMessage(draftId);
+            }
         }
     }
 
@@ -70,27 +74,29 @@ public sealed class MailDraftToolsTests(IntegrationFixture fixture)
         string? draftId = null;
         try
         {
-            var createResult = await _draftTools.CreateDraftMessage(
+            string createResult = await _draftTools.CreateDraftMessage(
                 subject: "Helix Draft Test - CC",
                 body: "CC test",
                 toRecipients: "clark@saib.dev");
 
-            using var createDoc = JsonDocument.Parse(createResult);
+            using JsonDocument createDoc = JsonDocument.Parse(createResult);
             draftId = createDoc.RootElement.GetProperty("id").GetString()!;
 
-            var updateResult = await _draftTools.UpdateDraftMessage(
+            string updateResult = await _draftTools.UpdateDraftMessage(
                 messageId: draftId,
                 ccRecipients: "clark@saib.dev",
                 importance: "high");
 
             IntegrationFixture.AssertSuccess(updateResult);
-            using var updateDoc = JsonDocument.Parse(updateResult);
+            using JsonDocument updateDoc = JsonDocument.Parse(updateResult);
             Assert.Equal("high", updateDoc.RootElement.GetProperty("importance").GetString());
         }
         finally
         {
             if (draftId is not null)
-                await _mailTools.DeleteMailMessage(draftId);
+            {
+                _ = await _mailTools.DeleteMailMessage(draftId);
+            }
         }
     }
 
@@ -102,7 +108,7 @@ public sealed class MailDraftToolsTests(IntegrationFixture fixture)
         try
         {
             // Send a real message so we have a received message to reply to
-            await _mailTools.SendMail(
+            _ = await _mailTools.SendMail(
                 subject: "Helix Draft Test - Reply Original",
                 body: "Original message body",
                 toRecipients: "clark@saib.dev");
@@ -111,24 +117,29 @@ public sealed class MailDraftToolsTests(IntegrationFixture fixture)
             receivedId = await FindTestEmail("Helix Draft Test - Reply Original");
             Assert.NotNull(receivedId);
 
-            var replyResult = await _draftTools.CreateReplyDraft(
+            string replyResult = await _draftTools.CreateReplyDraft(
                 messageId: receivedId!,
                 comment: "This is a reply");
 
             IntegrationFixture.AssertSuccess(replyResult);
-            using var replyDoc = JsonDocument.Parse(replyResult);
+            using JsonDocument replyDoc = JsonDocument.Parse(replyResult);
             replyDraftId = replyDoc.RootElement.GetProperty("id").GetString();
             Assert.NotNull(replyDraftId);
 
-            var subject = replyDoc.RootElement.GetProperty("subject").GetString();
+            string? subject = replyDoc.RootElement.GetProperty("subject").GetString();
             Assert.StartsWith("Re:", subject, StringComparison.OrdinalIgnoreCase);
         }
         finally
         {
             if (replyDraftId is not null)
-                await _mailTools.DeleteMailMessage(replyDraftId);
+            {
+                _ = await _mailTools.DeleteMailMessage(replyDraftId);
+            }
+
             if (receivedId is not null)
-                await _mailTools.DeleteMailMessage(receivedId);
+            {
+                _ = await _mailTools.DeleteMailMessage(receivedId);
+            }
         }
     }
 
@@ -140,7 +151,7 @@ public sealed class MailDraftToolsTests(IntegrationFixture fixture)
         try
         {
             // Send a real message so we have a received message to reply-all to
-            await _mailTools.SendMail(
+            _ = await _mailTools.SendMail(
                 subject: "Helix Draft Test - ReplyAll Original",
                 body: "Original message body",
                 toRecipients: "clark@saib.dev");
@@ -149,24 +160,29 @@ public sealed class MailDraftToolsTests(IntegrationFixture fixture)
             receivedId = await FindTestEmail("Helix Draft Test - ReplyAll Original");
             Assert.NotNull(receivedId);
 
-            var replyResult = await _draftTools.CreateReplyAllDraft(
+            string replyResult = await _draftTools.CreateReplyAllDraft(
                 messageId: receivedId!,
                 comment: "This is a reply-all");
 
             IntegrationFixture.AssertSuccess(replyResult);
-            using var replyDoc = JsonDocument.Parse(replyResult);
+            using JsonDocument replyDoc = JsonDocument.Parse(replyResult);
             replyDraftId = replyDoc.RootElement.GetProperty("id").GetString();
             Assert.NotNull(replyDraftId);
 
-            var subject = replyDoc.RootElement.GetProperty("subject").GetString();
+            string? subject = replyDoc.RootElement.GetProperty("subject").GetString();
             Assert.StartsWith("Re:", subject, StringComparison.OrdinalIgnoreCase);
         }
         finally
         {
             if (replyDraftId is not null)
-                await _mailTools.DeleteMailMessage(replyDraftId);
+            {
+                _ = await _mailTools.DeleteMailMessage(replyDraftId);
+            }
+
             if (receivedId is not null)
-                await _mailTools.DeleteMailMessage(receivedId);
+            {
+                _ = await _mailTools.DeleteMailMessage(receivedId);
+            }
         }
     }
 
@@ -177,77 +193,87 @@ public sealed class MailDraftToolsTests(IntegrationFixture fixture)
         string? forwardDraftId = null;
         try
         {
-            var originalResult = await _draftTools.CreateDraftMessage(
+            string originalResult = await _draftTools.CreateDraftMessage(
                 subject: "Helix Draft Test - Forward Original",
                 body: "Original message body",
                 toRecipients: "clark@saib.dev");
 
             IntegrationFixture.AssertSuccess(originalResult);
-            using var originalDoc = JsonDocument.Parse(originalResult);
+            using JsonDocument originalDoc = JsonDocument.Parse(originalResult);
             originalId = originalDoc.RootElement.GetProperty("id").GetString();
 
-            var forwardResult = await _draftTools.CreateForwardDraft(
+            string forwardResult = await _draftTools.CreateForwardDraft(
                 messageId: originalId!,
                 toRecipients: "clark@saib.dev",
                 comment: "Forwarding this to you");
 
             IntegrationFixture.AssertSuccess(forwardResult);
-            using var forwardDoc = JsonDocument.Parse(forwardResult);
+            using JsonDocument forwardDoc = JsonDocument.Parse(forwardResult);
             forwardDraftId = forwardDoc.RootElement.GetProperty("id").GetString();
             Assert.NotNull(forwardDraftId);
 
-            var subject = forwardDoc.RootElement.GetProperty("subject").GetString();
+            string? subject = forwardDoc.RootElement.GetProperty("subject").GetString();
             Assert.Contains("Fw", subject, StringComparison.OrdinalIgnoreCase);
         }
         finally
         {
             if (forwardDraftId is not null)
-                await _mailTools.DeleteMailMessage(forwardDraftId);
+            {
+                _ = await _mailTools.DeleteMailMessage(forwardDraftId);
+            }
+
             if (originalId is not null)
-                await _mailTools.DeleteMailMessage(originalId);
+            {
+                _ = await _mailTools.DeleteMailMessage(originalId);
+            }
         }
     }
 
     [Fact]
     public async Task SendDraftSucceeds()
     {
-        var createResult = await _draftTools.CreateDraftMessage(
+        string createResult = await _draftTools.CreateDraftMessage(
             subject: "Helix Draft Test - Send",
             body: "Draft to be sent",
             toRecipients: "clark@saib.dev");
 
-        using var createDoc = JsonDocument.Parse(createResult);
-        var draftId = createDoc.RootElement.GetProperty("id").GetString()!;
+        using JsonDocument createDoc = JsonDocument.Parse(createResult);
+        string draftId = createDoc.RootElement.GetProperty("id").GetString()!;
 
-        var sendResult = await _draftTools.SendDraftMessage(draftId);
+        string sendResult = await _draftTools.SendDraftMessage(draftId);
         IntegrationFixture.AssertSuccessNoData(sendResult);
 
         // Cleanup: wait and delete the received email
         await Task.Delay(3000, TestContext.Current.CancellationToken);
-        var listResult = await _mailTools.ListMailMessages(top: 5, search: "\"Helix Draft Test - Send\"");
-        using var listDoc = JsonDocument.Parse(listResult);
-        if (listDoc.RootElement.TryGetProperty("value", out var values))
+        string listResult = await _mailTools.ListMailMessages(top: 5, search: "\"Helix Draft Test - Send\"");
+        using JsonDocument listDoc = JsonDocument.Parse(listResult);
+        if (listDoc.RootElement.TryGetProperty("value", out JsonElement values))
         {
-            foreach (var msg in values.EnumerateArray())
+            foreach (JsonElement msg in values.EnumerateArray())
             {
-                if (msg.TryGetProperty("subject", out var s) && s.GetString()?.Contains("Helix Draft Test - Send", StringComparison.Ordinal) == true)
-                    await _mailTools.DeleteMailMessage(msg.GetProperty("id").GetString()!);
+                if (msg.TryGetProperty("subject", out JsonElement s) && s.GetString()?.Contains("Helix Draft Test - Send", StringComparison.Ordinal) == true)
+                {
+                    _ = await _mailTools.DeleteMailMessage(msg.GetProperty("id").GetString()!);
+                }
             }
         }
     }
 
     private async Task<string?> FindTestEmail(string subject)
     {
-        var result = await _mailTools.ListMailMessages(top: 10, search: $"\"{subject}\"").ConfigureAwait(false);
-        using var doc = JsonDocument.Parse(result);
-        if (doc.RootElement.TryGetProperty("value", out var values))
+        string result = await _mailTools.ListMailMessages(top: 10, search: $"\"{subject}\"").ConfigureAwait(false);
+        using JsonDocument doc = JsonDocument.Parse(result);
+        if (doc.RootElement.TryGetProperty("value", out JsonElement values))
         {
-            foreach (var msg in values.EnumerateArray())
+            foreach (JsonElement msg in values.EnumerateArray())
             {
-                if (msg.TryGetProperty("subject", out var s) && s.GetString()?.Contains(subject, StringComparison.Ordinal) == true)
+                if (msg.TryGetProperty("subject", out JsonElement s) && s.GetString()?.Contains(subject, StringComparison.Ordinal) == true)
+                {
                     return msg.GetProperty("id").GetString();
+                }
             }
         }
+
         return null;
     }
 }
