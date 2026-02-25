@@ -230,4 +230,65 @@ public class SharePointFileTools(GraphServiceClient graphClient)
             return GraphResponseHelper.FormatError(ex);
         }
     }
+
+    /// <inheritdoc />
+    [McpServerTool(Name = "move-rename-drive-item"),
+     Description("Move a file or folder to a different parent folder, rename it, or both. "
+        + "Provide destinationParentItemId to move, newName to rename, or both to do both at once. "
+        + "IMPORTANT: Always confirm with the user before calling this tool.")]
+    public async Task<string> MoveOrRenameDriveItem(
+        [Description("The drive ID.")] string driveId,
+        [Description("The item ID of the file or folder to move or rename.")] string itemId,
+        [Description("New parent folder item ID to move the item into.")] string? destinationParentItemId = null,
+        [Description("New name for the item (including file extension).")] string? newName = null)
+    {
+        if (string.IsNullOrWhiteSpace(destinationParentItemId) && string.IsNullOrWhiteSpace(newName))
+        {
+            return GraphResponseHelper.FormatError("At least one of 'destinationParentItemId' or 'newName' must be provided.");
+        }
+
+        try
+        {
+            DriveItem patch = new();
+
+            if (!string.IsNullOrWhiteSpace(newName))
+            {
+                patch.Name = newName;
+            }
+
+            if (!string.IsNullOrWhiteSpace(destinationParentItemId))
+            {
+                patch.ParentReference = new ItemReference { Id = destinationParentItemId };
+            }
+
+            DriveItem? updated = await graphClient.Drives[driveId].Items[itemId]
+                .PatchAsync(patch).ConfigureAwait(false);
+
+            return GraphResponseHelper.FormatResponse(updated);
+        }
+        catch (ODataError ex)
+        {
+            return GraphResponseHelper.FormatError(ex);
+        }
+    }
+
+    /// <inheritdoc />
+    [McpServerTool(Name = "delete-drive-item"),
+     Description("Delete a file or folder from a SharePoint document library. "
+        + "Deleting a folder also deletes all of its contents. "
+        + "IMPORTANT: Always confirm with the user before calling this tool.")]
+    public async Task<string> DeleteDriveItem(
+        [Description("The drive ID.")] string driveId,
+        [Description("The item ID of the file or folder to delete.")] string itemId)
+    {
+        try
+        {
+            await graphClient.Drives[driveId].Items[itemId].DeleteAsync().ConfigureAwait(false);
+            return GraphResponseHelper.FormatResponse(null);
+        }
+        catch (ODataError ex)
+        {
+            return GraphResponseHelper.FormatError(ex);
+        }
+    }
 }
