@@ -7,9 +7,13 @@ using ModelContextProtocol.Server;
 
 namespace Helix.Tools.SharePoint;
 
+/// <summary>
+/// MCP tools for discovering and inspecting SharePoint sites and lists via Microsoft Graph.
+/// </summary>
 [McpServerToolType]
 public class SharePointSiteTools(GraphServiceClient graphClient)
 {
+    /// <inheritdoc />
     [McpServerTool(Name = "search-sites", ReadOnly = true),
      Description("Search for SharePoint sites by keyword. "
         + "Returns site ID, name, URL, and description. "
@@ -20,7 +24,7 @@ public class SharePointSiteTools(GraphServiceClient graphClient)
     {
         try
         {
-            var sites = await graphClient.Sites.GetAsync(config =>
+            SiteCollectionResponse? sites = await graphClient.Sites.GetAsync(config =>
             {
                 config.QueryParameters.Search = query;
                 config.QueryParameters.Top = top ?? 10;
@@ -35,6 +39,7 @@ public class SharePointSiteTools(GraphServiceClient graphClient)
         }
     }
 
+    /// <inheritdoc />
     [McpServerTool(Name = "get-site", ReadOnly = true),
      Description("Get a SharePoint site by its ID. Returns full site details including URL and description.")]
     public async Task<string> GetSite(
@@ -42,7 +47,7 @@ public class SharePointSiteTools(GraphServiceClient graphClient)
     {
         try
         {
-            var site = await graphClient.Sites[siteId].GetAsync().ConfigureAwait(false);
+            Site? site = await graphClient.Sites[siteId].GetAsync().ConfigureAwait(false);
             return GraphResponseHelper.FormatResponse(site);
         }
         catch (ODataError ex)
@@ -51,6 +56,7 @@ public class SharePointSiteTools(GraphServiceClient graphClient)
         }
     }
 
+    /// <inheritdoc />
     [McpServerTool(Name = "list-site-lists", ReadOnly = true),
      Description("List all lists in a SharePoint site. Returns list ID, name, description, and template.")]
     public async Task<string> ListSiteLists(
@@ -59,7 +65,7 @@ public class SharePointSiteTools(GraphServiceClient graphClient)
     {
         try
         {
-            var lists = await graphClient.Sites[siteId].Lists.GetAsync(config =>
+            ListCollectionResponse? lists = await graphClient.Sites[siteId].Lists.GetAsync(config =>
             {
                 config.QueryParameters.Top = top ?? 20;
                 config.QueryParameters.Select = ["id", "displayName", "description", "webUrl", "list"];
@@ -73,6 +79,7 @@ public class SharePointSiteTools(GraphServiceClient graphClient)
         }
     }
 
+    /// <inheritdoc />
     [McpServerTool(Name = "get-site-list", ReadOnly = true),
      Description("Get a specific SharePoint list by ID. Returns list details including column definitions when expanded.")]
     public async Task<string> GetSiteList(
@@ -81,7 +88,7 @@ public class SharePointSiteTools(GraphServiceClient graphClient)
     {
         try
         {
-            var list = await graphClient.Sites[siteId].Lists[listId].GetAsync(config =>
+            Microsoft.Graph.Models.List? list = await graphClient.Sites[siteId].Lists[listId].GetAsync(config =>
             {
                 config.QueryParameters.Expand = ["columns"];
             }).ConfigureAwait(false);

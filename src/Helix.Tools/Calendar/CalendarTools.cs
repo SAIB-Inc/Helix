@@ -10,19 +10,24 @@ using ModelContextProtocol.Server;
 
 namespace Helix.Tools.Calendar;
 
+/// <summary>
+/// MCP tools for managing Microsoft 365 calendar events.
+/// </summary>
+/// <param name="graphClient">The Microsoft Graph service client.</param>
 [McpServerToolType]
 public class CalendarTools(GraphServiceClient graphClient)
 {
     private static readonly string[] DefaultEventSelect =
         ["id", "subject", "start", "end", "location", "organizer", "isAllDay", "isCancelled", "responseStatus"];
 
+    /// <inheritdoc />
     [McpServerTool(Name = "list-calendars", ReadOnly = true),
      Description("List all calendars for the signed-in user. Returns calendar ID, name, color, and permissions.")]
     public async Task<string> ListCalendars()
     {
         try
         {
-            var calendars = await graphClient.Me.Calendars.GetAsync(config =>
+            CalendarCollectionResponse? calendars = await graphClient.Me.Calendars.GetAsync(config =>
             {
                 config.QueryParameters.Select = ["id", "name", "color", "isDefaultCalendar", "canEdit"];
             }).ConfigureAwait(false);
@@ -35,6 +40,7 @@ public class CalendarTools(GraphServiceClient graphClient)
         }
     }
 
+    /// <inheritdoc />
     [McpServerTool(Name = "list-calendar-events", ReadOnly = true),
      Description("List calendar events from the signed-in user's default calendar. "
         + "Supports OData query parameters for filtering and paging. "
@@ -49,18 +55,26 @@ public class CalendarTools(GraphServiceClient graphClient)
     {
         try
         {
-            var events = await graphClient.Me.Events.GetAsync(config =>
+            EventCollectionResponse? events = await graphClient.Me.Events.GetAsync(config =>
             {
                 config.QueryParameters.Top = top ?? 10;
                 config.QueryParameters.Select = !string.IsNullOrEmpty(select)
                     ? select.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                     : DefaultEventSelect;
                 if (!string.IsNullOrEmpty(filter))
+                {
                     config.QueryParameters.Filter = filter;
+                }
+
                 if (!string.IsNullOrEmpty(orderby))
+                {
                     config.QueryParameters.Orderby = [orderby];
+                }
+
                 if (skip.HasValue)
+                {
                     config.QueryParameters.Skip = skip.Value;
+                }
             }).ConfigureAwait(false);
 
             return GraphResponseHelper.FormatResponse(events);
@@ -71,6 +85,7 @@ public class CalendarTools(GraphServiceClient graphClient)
         }
     }
 
+    /// <inheritdoc />
     [McpServerTool(Name = "get-calendar-event", ReadOnly = true),
      Description("Get a specific calendar event by its ID. Returns the full event including body content.")]
     public async Task<string> GetCalendarEvent(
@@ -78,7 +93,7 @@ public class CalendarTools(GraphServiceClient graphClient)
     {
         try
         {
-            var calendarEvent = await graphClient.Me.Events[eventId].GetAsync().ConfigureAwait(false);
+            Event? calendarEvent = await graphClient.Me.Events[eventId].GetAsync().ConfigureAwait(false);
             return GraphResponseHelper.FormatResponse(calendarEvent);
         }
         catch (ODataError ex)
@@ -87,6 +102,7 @@ public class CalendarTools(GraphServiceClient graphClient)
         }
     }
 
+    /// <inheritdoc />
     [McpServerTool(Name = "list-calendar-view", ReadOnly = true),
      Description("List calendar events within a specific date/time range. "
         + "Unlike list-calendar-events, this expands recurring events into individual occurrences. "
@@ -102,7 +118,7 @@ public class CalendarTools(GraphServiceClient graphClient)
     {
         try
         {
-            var events = await graphClient.Me.CalendarView.GetAsync(config =>
+            EventCollectionResponse? events = await graphClient.Me.CalendarView.GetAsync(config =>
             {
                 config.QueryParameters.StartDateTime = startDateTime;
                 config.QueryParameters.EndDateTime = endDateTime;
@@ -111,11 +127,19 @@ public class CalendarTools(GraphServiceClient graphClient)
                     ? select.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                     : DefaultEventSelect;
                 if (!string.IsNullOrEmpty(filter))
+                {
                     config.QueryParameters.Filter = filter;
+                }
+
                 if (!string.IsNullOrEmpty(orderby))
+                {
                     config.QueryParameters.Orderby = [orderby];
+                }
+
                 if (skip.HasValue)
+                {
                     config.QueryParameters.Skip = skip.Value;
+                }
             }).ConfigureAwait(false);
 
             return GraphResponseHelper.FormatResponse(events);
@@ -126,6 +150,7 @@ public class CalendarTools(GraphServiceClient graphClient)
         }
     }
 
+    /// <inheritdoc />
     [McpServerTool(Name = "create-calendar-event"),
      Description("Create a new calendar event. "
         + "Times must be in ISO 8601 format (e.g. '2025-06-15T14:00:00'). "
@@ -146,7 +171,7 @@ public class CalendarTools(GraphServiceClient graphClient)
     {
         try
         {
-            var calendarEvent = new Event
+            Event calendarEvent = new()
             {
                 Subject = subject,
                 Start = new DateTimeTimeZone { DateTime = startDateTime, TimeZone = startTimeZone },
@@ -163,7 +188,9 @@ public class CalendarTools(GraphServiceClient graphClient)
             }
 
             if (!string.IsNullOrWhiteSpace(location))
+            {
                 calendarEvent.Location = new Location { DisplayName = location };
+            }
 
             if (!string.IsNullOrWhiteSpace(attendees))
             {
@@ -177,12 +204,16 @@ public class CalendarTools(GraphServiceClient graphClient)
             }
 
             if (GraphResponseHelper.IsTruthy(isOnlineMeeting))
+            {
                 calendarEvent.IsOnlineMeeting = true;
+            }
 
             if (GraphResponseHelper.IsTruthy(isAllDay))
+            {
                 calendarEvent.IsAllDay = true;
+            }
 
-            var created = await graphClient.Me.Events.PostAsync(calendarEvent).ConfigureAwait(false);
+            Event? created = await graphClient.Me.Events.PostAsync(calendarEvent).ConfigureAwait(false);
             return GraphResponseHelper.FormatResponse(created);
         }
         catch (ODataError ex)
@@ -191,6 +222,7 @@ public class CalendarTools(GraphServiceClient graphClient)
         }
     }
 
+    /// <inheritdoc />
     [McpServerTool(Name = "update-calendar-event"),
      Description("Update an existing calendar event. Only provided fields are updated. "
         + "IMPORTANT: Always confirm with the user before calling this tool.")]
@@ -209,16 +241,22 @@ public class CalendarTools(GraphServiceClient graphClient)
     {
         try
         {
-            var calendarEvent = new Event();
+            Event calendarEvent = new();
 
             if (!string.IsNullOrEmpty(subject))
+            {
                 calendarEvent.Subject = subject;
+            }
 
             if (!string.IsNullOrEmpty(startDateTime) && !string.IsNullOrEmpty(startTimeZone))
+            {
                 calendarEvent.Start = new DateTimeTimeZone { DateTime = startDateTime, TimeZone = startTimeZone };
+            }
 
             if (!string.IsNullOrEmpty(endDateTime) && !string.IsNullOrEmpty(endTimeZone))
+            {
                 calendarEvent.End = new DateTimeTimeZone { DateTime = endDateTime, TimeZone = endTimeZone };
+            }
 
             if (!string.IsNullOrWhiteSpace(body))
             {
@@ -230,15 +268,21 @@ public class CalendarTools(GraphServiceClient graphClient)
             }
 
             if (!string.IsNullOrWhiteSpace(location))
+            {
                 calendarEvent.Location = new Location { DisplayName = location };
+            }
 
             if (isOnlineMeeting is not null)
+            {
                 calendarEvent.IsOnlineMeeting = GraphResponseHelper.IsTruthy(isOnlineMeeting);
+            }
 
             if (isAllDay is not null)
+            {
                 calendarEvent.IsAllDay = GraphResponseHelper.IsTruthy(isAllDay);
+            }
 
-            var updated = await graphClient.Me.Events[eventId].PatchAsync(calendarEvent).ConfigureAwait(false);
+            Event? updated = await graphClient.Me.Events[eventId].PatchAsync(calendarEvent).ConfigureAwait(false);
             return GraphResponseHelper.FormatResponse(updated);
         }
         catch (ODataError ex)
@@ -247,6 +291,7 @@ public class CalendarTools(GraphServiceClient graphClient)
         }
     }
 
+    /// <inheritdoc />
     [McpServerTool(Name = "delete-calendar-event"),
      Description("Delete a calendar event. "
         + "IMPORTANT: Always confirm with the user before calling this tool.")]
@@ -264,6 +309,7 @@ public class CalendarTools(GraphServiceClient graphClient)
         }
     }
 
+    /// <inheritdoc />
     [McpServerTool(Name = "respond-calendar-event"),
      Description("Respond to a calendar event invitation (accept, decline, or tentatively accept). "
         + "IMPORTANT: Always confirm with the user before calling this tool.")]
@@ -276,7 +322,7 @@ public class CalendarTools(GraphServiceClient graphClient)
         try
         {
             ArgumentNullException.ThrowIfNull(response);
-            var send = sendResponse is null || GraphResponseHelper.IsTruthy(sendResponse);
+            bool send = sendResponse is null || GraphResponseHelper.IsTruthy(sendResponse);
 
             switch (response.ToUpperInvariant())
             {

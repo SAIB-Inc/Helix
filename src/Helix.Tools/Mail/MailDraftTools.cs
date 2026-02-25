@@ -4,16 +4,19 @@ using Microsoft.Graph;
 using Microsoft.Graph.Me.Messages.Item.CreateForward;
 using Microsoft.Graph.Me.Messages.Item.CreateReply;
 using Microsoft.Graph.Me.Messages.Item.CreateReplyAll;
-using Microsoft.Graph.Me.Messages.Item.Send;
 using Microsoft.Graph.Models;
 using Microsoft.Graph.Models.ODataErrors;
 using ModelContextProtocol.Server;
 
 namespace Helix.Tools.Mail;
 
+/// <summary>
+/// MCP tools for creating, updating, and sending draft mail messages via Microsoft Graph.
+/// </summary>
 [McpServerToolType]
 public class MailDraftTools(GraphServiceClient graphClient)
 {
+    /// <inheritdoc />
     [McpServerTool(Name = "create-draft-message"),
      Description("Create a draft email message in the Drafts folder. "
         + "Returns the draft message with its ID, which can be used with 'add-mail-attachment' to attach files "
@@ -30,7 +33,7 @@ public class MailDraftTools(GraphServiceClient graphClient)
     {
         try
         {
-            var message = new Message
+            Message message = new()
             {
                 Subject = subject,
                 Body = new ItemBody
@@ -41,18 +44,24 @@ public class MailDraftTools(GraphServiceClient graphClient)
                 ToRecipients = MailTools.ParseRecipients(toRecipients)
             };
 
-            var cc = MailTools.ParseRecipients(ccRecipients);
+            List<Recipient> cc = MailTools.ParseRecipients(ccRecipients);
             if (cc.Count > 0)
+            {
                 message.CcRecipients = cc;
+            }
 
-            var bcc = MailTools.ParseRecipients(bccRecipients);
+            List<Recipient> bcc = MailTools.ParseRecipients(bccRecipients);
             if (bcc.Count > 0)
+            {
                 message.BccRecipients = bcc;
+            }
 
             if (!string.IsNullOrWhiteSpace(importance))
+            {
                 message.Importance = MailTools.ParseImportance(importance);
+            }
 
-            var draft = await graphClient.Me.Messages.PostAsync(message).ConfigureAwait(false);
+            Message? draft = await graphClient.Me.Messages.PostAsync(message).ConfigureAwait(false);
             return GraphResponseHelper.FormatResponse(draft);
         }
         catch (ODataError ex)
@@ -61,6 +70,7 @@ public class MailDraftTools(GraphServiceClient graphClient)
         }
     }
 
+    /// <inheritdoc />
     [McpServerTool(Name = "create-reply-draft"),
      Description("Create a draft reply to an existing message (reply to sender only). "
         + "The draft is created in the Drafts folder with correct threading and quoted original message. "
@@ -73,11 +83,13 @@ public class MailDraftTools(GraphServiceClient graphClient)
     {
         try
         {
-            var requestBody = new CreateReplyPostRequestBody();
+            CreateReplyPostRequestBody requestBody = new();
             if (!string.IsNullOrWhiteSpace(comment))
+            {
                 requestBody.Comment = comment;
+            }
 
-            var draft = await graphClient.Me.Messages[messageId].CreateReply
+            Message? draft = await graphClient.Me.Messages[messageId].CreateReply
                 .PostAsync(requestBody).ConfigureAwait(false);
             return GraphResponseHelper.FormatResponse(draft);
         }
@@ -87,6 +99,7 @@ public class MailDraftTools(GraphServiceClient graphClient)
         }
     }
 
+    /// <inheritdoc />
     [McpServerTool(Name = "create-reply-all-draft"),
      Description("Create a draft reply-all to an existing message (reply to sender and all recipients). "
         + "The draft is created in the Drafts folder with correct threading and quoted original message. "
@@ -99,11 +112,13 @@ public class MailDraftTools(GraphServiceClient graphClient)
     {
         try
         {
-            var requestBody = new CreateReplyAllPostRequestBody();
+            CreateReplyAllPostRequestBody requestBody = new();
             if (!string.IsNullOrWhiteSpace(comment))
+            {
                 requestBody.Comment = comment;
+            }
 
-            var draft = await graphClient.Me.Messages[messageId].CreateReplyAll
+            Message? draft = await graphClient.Me.Messages[messageId].CreateReplyAll
                 .PostAsync(requestBody).ConfigureAwait(false);
             return GraphResponseHelper.FormatResponse(draft);
         }
@@ -113,6 +128,7 @@ public class MailDraftTools(GraphServiceClient graphClient)
         }
     }
 
+    /// <inheritdoc />
     [McpServerTool(Name = "create-forward-draft"),
      Description("Create a draft forward of an existing message. "
         + "The draft is created in the Drafts folder with the original message as quoted content. "
@@ -126,15 +142,19 @@ public class MailDraftTools(GraphServiceClient graphClient)
     {
         try
         {
-            var requestBody = new CreateForwardPostRequestBody();
+            CreateForwardPostRequestBody requestBody = new();
             if (!string.IsNullOrWhiteSpace(comment))
+            {
                 requestBody.Comment = comment;
+            }
 
-            var recipients = MailTools.ParseRecipients(toRecipients);
+            List<Recipient> recipients = MailTools.ParseRecipients(toRecipients);
             if (recipients.Count > 0)
+            {
                 requestBody.ToRecipients = recipients;
+            }
 
-            var draft = await graphClient.Me.Messages[messageId].CreateForward
+            Message? draft = await graphClient.Me.Messages[messageId].CreateForward
                 .PostAsync(requestBody).ConfigureAwait(false);
             return GraphResponseHelper.FormatResponse(draft);
         }
@@ -144,6 +164,7 @@ public class MailDraftTools(GraphServiceClient graphClient)
         }
     }
 
+    /// <inheritdoc />
     [McpServerTool(Name = "update-draft-message"),
      Description("Update a draft email message. Only provided fields are updated. "
         + "Use this to modify the subject, body, or recipients of a draft before sending. "
@@ -160,10 +181,12 @@ public class MailDraftTools(GraphServiceClient graphClient)
     {
         try
         {
-            var message = new Message();
+            Message message = new();
 
             if (!string.IsNullOrEmpty(subject))
+            {
                 message.Subject = subject;
+            }
 
             if (!string.IsNullOrWhiteSpace(body))
             {
@@ -175,18 +198,26 @@ public class MailDraftTools(GraphServiceClient graphClient)
             }
 
             if (!string.IsNullOrWhiteSpace(toRecipients))
+            {
                 message.ToRecipients = MailTools.ParseRecipients(toRecipients);
+            }
 
             if (!string.IsNullOrWhiteSpace(ccRecipients))
+            {
                 message.CcRecipients = MailTools.ParseRecipients(ccRecipients);
+            }
 
             if (!string.IsNullOrWhiteSpace(bccRecipients))
+            {
                 message.BccRecipients = MailTools.ParseRecipients(bccRecipients);
+            }
 
             if (!string.IsNullOrWhiteSpace(importance))
+            {
                 message.Importance = MailTools.ParseImportance(importance);
+            }
 
-            var updated = await graphClient.Me.Messages[messageId].PatchAsync(message).ConfigureAwait(false);
+            Message? updated = await graphClient.Me.Messages[messageId].PatchAsync(message).ConfigureAwait(false);
             return GraphResponseHelper.FormatResponse(updated);
         }
         catch (ODataError ex)
@@ -195,6 +226,7 @@ public class MailDraftTools(GraphServiceClient graphClient)
         }
     }
 
+    /// <inheritdoc />
     [McpServerTool(Name = "send-draft-message"),
      Description("Send an existing draft message by its ID. "
         + "Use after 'create-draft-message' and optionally 'add-mail-attachment'. "

@@ -13,81 +13,94 @@ public sealed class SharePointListToolsTests(IntegrationFixture fixture)
     [Fact]
     public async Task ListListItemsReturnsItems()
     {
-        var listId = await GetAnyListId();
-        if (listId is null) return;
+        string? listId = await GetAnyListId();
+        if (listId is null)
+        {
+            return;
+        }
 
-        var result = await _tools.ListListItems(fixture.SiteId, listId, top: 5);
+        string result = await _tools.ListListItems(fixture.SiteId, listId, top: 5);
 
         IntegrationFixture.AssertSuccess(result);
-        using var doc = JsonDocument.Parse(result);
+        using JsonDocument doc = JsonDocument.Parse(result);
         Assert.True(doc.RootElement.TryGetProperty("value", out _));
     }
 
     [Fact]
     public async Task CreateGetUpdateDeleteListItemFullCycle()
     {
-        var listId = await GetGenericListId();
-        if (listId is null) return; // No generic list available — skip
+        string? listId = await GetGenericListId();
+        if (listId is null)
+        {
+            return; // No generic list available — skip
+        }
 
         string? itemId = null;
         try
         {
             // Create
-            var createResult = await _tools.CreateListItem(fixture.SiteId, listId, "{\"Title\": \"Helix Test Item\"}");
+            string createResult = await _tools.CreateListItem(fixture.SiteId, listId, "{\"Title\": \"Helix Test Item\"}");
             IntegrationFixture.AssertSuccess(createResult);
-            using var createDoc = JsonDocument.Parse(createResult);
+            using JsonDocument createDoc = JsonDocument.Parse(createResult);
             itemId = createDoc.RootElement.GetProperty("id").GetString()!;
 
             // Get
-            var getResult = await _tools.GetListItem(fixture.SiteId, listId, itemId);
+            string getResult = await _tools.GetListItem(fixture.SiteId, listId, itemId);
             IntegrationFixture.AssertSuccess(getResult);
-            using var getDoc = JsonDocument.Parse(getResult);
+            using JsonDocument getDoc = JsonDocument.Parse(getResult);
             Assert.True(getDoc.RootElement.TryGetProperty("id", out _));
 
             // Update
-            var updateResult = await _tools.UpdateListItem(fixture.SiteId, listId, itemId, "{\"Title\": \"Helix Test - Updated\"}");
+            string updateResult = await _tools.UpdateListItem(fixture.SiteId, listId, itemId, "{\"Title\": \"Helix Test - Updated\"}");
             IntegrationFixture.AssertSuccess(updateResult);
-            using var updateDoc = JsonDocument.Parse(updateResult);
+            using JsonDocument updateDoc = JsonDocument.Parse(updateResult);
 
             // Delete
-            var deleteResult = await _tools.DeleteListItem(fixture.SiteId, listId, itemId);
+            string deleteResult = await _tools.DeleteListItem(fixture.SiteId, listId, itemId);
             IntegrationFixture.AssertSuccessNoData(deleteResult);
             itemId = null; // Prevent double-delete in finally
         }
         finally
         {
             if (itemId is not null)
-                await _tools.DeleteListItem(fixture.SiteId, listId, itemId);
+            {
+                _ = await _tools.DeleteListItem(fixture.SiteId, listId, itemId);
+            }
         }
     }
 
     private async Task<string?> GetAnyListId()
     {
         if (string.IsNullOrEmpty(fixture.SiteId))
+        {
             return null;
+        }
 
-        var result = await _siteTools.ListSiteLists(fixture.SiteId).ConfigureAwait(false);
-        using var doc = JsonDocument.Parse(result);
-        if (!doc.RootElement.TryGetProperty("value", out var values) || values.GetArrayLength() == 0)
-            return null;
-
-        return values[0].GetProperty("id").GetString();
+        string result = await _siteTools.ListSiteLists(fixture.SiteId).ConfigureAwait(false);
+        using JsonDocument doc = JsonDocument.Parse(result);
+        return !doc.RootElement.TryGetProperty("value", out JsonElement values) || values.GetArrayLength() == 0
+            ? null
+            : values[0].GetProperty("id").GetString();
     }
 
     private async Task<string?> GetGenericListId()
     {
         if (string.IsNullOrEmpty(fixture.SiteId))
-            return null;
-
-        var result = await _siteTools.ListSiteLists(fixture.SiteId).ConfigureAwait(false);
-        using var doc = JsonDocument.Parse(result);
-        if (!doc.RootElement.TryGetProperty("value", out var values))
-            return null;
-
-        foreach (var list in values.EnumerateArray())
         {
-            if (list.TryGetProperty("list", out var listProp) &&
-                listProp.TryGetProperty("template", out var template) &&
+            return null;
+        }
+
+        string result = await _siteTools.ListSiteLists(fixture.SiteId).ConfigureAwait(false);
+        using JsonDocument doc = JsonDocument.Parse(result);
+        if (!doc.RootElement.TryGetProperty("value", out JsonElement values))
+        {
+            return null;
+        }
+
+        foreach (JsonElement list in values.EnumerateArray())
+        {
+            if (list.TryGetProperty("list", out JsonElement listProp) &&
+                listProp.TryGetProperty("template", out JsonElement template) &&
                 template.GetString() == "genericList")
             {
                 return list.GetProperty("id").GetString();

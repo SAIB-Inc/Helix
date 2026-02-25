@@ -3,6 +3,7 @@ using dotenv.net;
 using Helix.Core.Auth;
 using Helix.Core.Configuration;
 using Microsoft.Graph;
+using Microsoft.Identity.Client;
 
 namespace Helix.Tools.Tests;
 
@@ -14,10 +15,10 @@ public sealed class IntegrationFixture : IAsyncLifetime
     public ValueTask InitializeAsync()
     {
         // Probe from the repo root by walking up from the bin output directory
-        var envDir = FindRepoRoot();
+        string envDir = FindRepoRoot();
         DotEnv.Load(new DotEnvOptions(envFilePaths: [Path.Combine(envDir, ".env")]));
 
-        var options = new HelixOptions
+        HelixOptions options = new()
         {
             ClientId = GetEnv("HELIX__ClientId"),
             TenantId = GetEnv("HELIX__TenantId", "common"),
@@ -27,8 +28,8 @@ public sealed class IntegrationFixture : IAsyncLifetime
 
         SiteId = GetEnv("HELIX__TestSiteId", "");
 
-        var msalApp = MsalClientFactory.CreateAsync(options).GetAwaiter().GetResult();
-        var factory = new HelixGraphClientFactory(options, msalApp);
+        IPublicClientApplication msalApp = MsalClientFactory.CreateAsync(options).GetAwaiter().GetResult();
+        HelixGraphClientFactory factory = new(options, msalApp);
         GraphClient = factory.Create();
 
         return ValueTask.CompletedTask;
@@ -45,10 +46,10 @@ public sealed class IntegrationFixture : IAsyncLifetime
     /// </summary>
     public static void AssertSuccess(string response)
     {
-        using var doc = JsonDocument.Parse(response);
-        if (doc.RootElement.TryGetProperty("error", out var err) && err.GetBoolean())
+        using JsonDocument doc = JsonDocument.Parse(response);
+        if (doc.RootElement.TryGetProperty("error", out JsonElement err) && err.GetBoolean())
         {
-            var message = doc.RootElement.TryGetProperty("message", out var msg) ? msg.GetString() : "Unknown error";
+            string? message = doc.RootElement.TryGetProperty("message", out JsonElement msg) ? msg.GetString() : "Unknown error";
             throw new InvalidOperationException($"Tool returned error: {message}");
         }
     }
@@ -58,8 +59,8 @@ public sealed class IntegrationFixture : IAsyncLifetime
     /// </summary>
     public static void AssertSuccessNoData(string response)
     {
-        using var doc = JsonDocument.Parse(response);
-        Assert.True(doc.RootElement.TryGetProperty("success", out var s) && s.GetBoolean());
+        using JsonDocument doc = JsonDocument.Parse(response);
+        Assert.True(doc.RootElement.TryGetProperty("success", out JsonElement s) && s.GetBoolean());
     }
 
     /// <summary>
@@ -68,8 +69,8 @@ public sealed class IntegrationFixture : IAsyncLifetime
     public static JsonElement AssertHasValues(string response)
     {
         AssertSuccess(response);
-        using var doc = JsonDocument.Parse(response);
-        Assert.True(doc.RootElement.TryGetProperty("value", out var values));
+        using JsonDocument doc = JsonDocument.Parse(response);
+        Assert.True(doc.RootElement.TryGetProperty("value", out JsonElement values));
         Assert.Equal(JsonValueKind.Array, values.ValueKind);
         return values.Clone();
     }
@@ -83,9 +84,12 @@ public sealed class IntegrationFixture : IAsyncLifetime
 
     private static string FindRepoRoot()
     {
-        var dir = AppContext.BaseDirectory;
+        string? dir = AppContext.BaseDirectory;
         while (dir is not null && !File.Exists(Path.Combine(dir, ".env")))
+        {
             dir = Directory.GetParent(dir)?.FullName;
+        }
+
         return dir ?? throw new InvalidOperationException("Could not find .env file in any parent directory.");
     }
 }

@@ -7,11 +7,13 @@ namespace Helix.Core.Auth;
 /// </summary>
 public class StaticTokenCredential(string accessToken) : TokenCredential
 {
+    /// <inheritdoc />
     public override AccessToken GetToken(TokenRequestContext requestContext, CancellationToken cancellationToken)
     {
         return new AccessToken(accessToken, DateTimeOffset.UtcNow.AddHours(1));
     }
 
+    /// <inheritdoc />
     public override ValueTask<AccessToken> GetTokenAsync(TokenRequestContext requestContext, CancellationToken cancellationToken)
     {
         return ValueTask.FromResult(new AccessToken(accessToken, DateTimeOffset.UtcNow.AddHours(1)));

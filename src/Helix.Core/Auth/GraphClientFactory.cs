@@ -10,11 +10,14 @@ namespace Helix.Core.Auth;
 /// </summary>
 public class HelixGraphClientFactory(HelixOptions options, IPublicClientApplication? msalApp = null)
 {
+    /// <summary>
+    /// Creates a new <see cref="GraphServiceClient"/> using the configured authentication method.
+    /// </summary>
     public GraphServiceClient Create()
     {
-        var credential = CreateCredential();
-        var graphEndpoint = CloudConfiguration.GetGraphEndpoint(options.CloudType);
-        var scopes = CloudConfiguration.GetGraphScopes(options.CloudType);
+        TokenCredential credential = CreateCredential();
+        string graphEndpoint = CloudConfiguration.GetGraphEndpoint(options.CloudType);
+        string[] scopes = CloudConfiguration.GetGraphScopes(options.CloudType);
 
         return new GraphServiceClient(credential, scopes, graphEndpoint);
     }
@@ -23,19 +26,23 @@ public class HelixGraphClientFactory(HelixOptions options, IPublicClientApplicat
     {
         // Priority 1: Static access token from env var
         if (!string.IsNullOrEmpty(options.AccessToken))
+        {
             return new StaticTokenCredential(options.AccessToken);
+        }
 
         // Priority 2: Client credentials (app-only, no user context)
         if (!string.IsNullOrEmpty(options.ClientSecret))
+        {
             return new Azure.Identity.ClientSecretCredential(
                 options.TenantId,
                 options.ClientId,
                 options.ClientSecret);
+        }
 
         // Priority 3: MSAL cached token (from 'helix login')
         if (msalApp is not null)
         {
-            var scopes = CloudConfiguration.GetGraphScopes(options.CloudType);
+            string[] scopes = CloudConfiguration.GetGraphScopes(options.CloudType);
             return new HelixTokenCredential(msalApp, scopes);
         }
 

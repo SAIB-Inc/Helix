@@ -1,0 +1,15 @@
+# Top-level EditorConfig
+root = true
+
+[*.cs]
+
+# ── Style preferences (tell Roslyn WHICH direction we want) ──
+csharp_style_namespace_declarations = file_scoped
+csharp_style_var_for_built_in_types = false
+csharp_style_var_when_type_is_apparent = false
+csharp_style_var_elsewhere = false
+
+# ── Promote ALL Roslyn style suggestions to warnings. ──
+# Combined with TreatWarningsAsErrors in Directory.Build.props,
+# every IDE suggestion becomes a build error.
+dotnet_analyzer_diagnostic.category-Style.severity = warning

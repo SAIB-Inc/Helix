@@ -8,9 +8,13 @@ using ModelContextProtocol.Server;
 
 namespace Helix.Tools.SharePoint;
 
+/// <summary>
+/// MCP tools for managing SharePoint list items via Microsoft Graph.
+/// </summary>
 [McpServerToolType]
 public class SharePointListTools(GraphServiceClient graphClient)
 {
+    /// <inheritdoc />
     [McpServerTool(Name = "list-list-items", ReadOnly = true),
      Description("List items in a SharePoint list. Returns items with their field values expanded. "
         + "Supports OData filtering and paging.")]
@@ -24,16 +28,24 @@ public class SharePointListTools(GraphServiceClient graphClient)
     {
         try
         {
-            var items = await graphClient.Sites[siteId].Lists[listId].Items.GetAsync(config =>
+            ListItemCollectionResponse? items = await graphClient.Sites[siteId].Lists[listId].Items.GetAsync(config =>
             {
                 config.QueryParameters.Top = top ?? 10;
                 config.QueryParameters.Expand = ["fields"];
                 if (!string.IsNullOrEmpty(filter))
+                {
                     config.QueryParameters.Filter = filter;
+                }
+
                 if (!string.IsNullOrEmpty(select))
+                {
                     config.QueryParameters.Select = select.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                }
+
                 if (skip.HasValue)
+                {
                     config.QueryParameters.Skip = skip.Value;
+                }
             }).ConfigureAwait(false);
 
             return GraphResponseHelper.FormatResponse(items);
@@ -44,6 +56,7 @@ public class SharePointListTools(GraphServiceClient graphClient)
         }
     }
 
+    /// <inheritdoc />
     [McpServerTool(Name = "get-list-item", ReadOnly = true),
      Description("Get a specific item from a SharePoint list. Returns the item with all field values.")]
     public async Task<string> GetListItem(
@@ -53,7 +66,7 @@ public class SharePointListTools(GraphServiceClient graphClient)
     {
         try
         {
-            var item = await graphClient.Sites[siteId].Lists[listId].Items[itemId].GetAsync(config =>
+            ListItem? item = await graphClient.Sites[siteId].Lists[listId].Items[itemId].GetAsync(config =>
             {
                 config.QueryParameters.Expand = ["fields"];
             }).ConfigureAwait(false);
@@ -66,6 +79,7 @@ public class SharePointListTools(GraphServiceClient graphClient)
         }
     }
 
+    /// <inheritdoc />
     [McpServerTool(Name = "create-list-item"),
      Description("Create a new item in a SharePoint list. "
         + "Fields are passed as a JSON object string, e.g. '{\"Title\": \"My Item\", \"Status\": \"Active\"}'. "
@@ -78,16 +92,18 @@ public class SharePointListTools(GraphServiceClient graphClient)
     {
         try
         {
-            var fieldValues = ParseFields(fields);
+            Dictionary<string, object>? fieldValues = ParseFields(fields);
             if (fieldValues is null)
+            {
                 return GraphResponseHelper.FormatError("Invalid JSON in 'fields' parameter. Expected a JSON object, e.g. '{\"Title\": \"My Item\"}'.");
+            }
 
-            var listItem = new ListItem
+            ListItem listItem = new()
             {
                 Fields = new FieldValueSet { AdditionalData = fieldValues }
             };
 
-            var created = await graphClient.Sites[siteId].Lists[listId].Items.PostAsync(listItem).ConfigureAwait(false);
+            ListItem? created = await graphClient.Sites[siteId].Lists[listId].Items.PostAsync(listItem).ConfigureAwait(false);
             return GraphResponseHelper.FormatResponse(created);
         }
         catch (ODataError ex)
@@ -96,6 +112,7 @@ public class SharePointListTools(GraphServiceClient graphClient)
         }
     }
 
+    /// <inheritdoc />
     [McpServerTool(Name = "update-list-item"),
      Description("Update an existing item in a SharePoint list. "
         + "Fields are passed as a JSON object string with only the fields to update. "
@@ -108,13 +125,15 @@ public class SharePointListTools(GraphServiceClient graphClient)
     {
         try
         {
-            var fieldValues = ParseFields(fields);
+            Dictionary<string, object>? fieldValues = ParseFields(fields);
             if (fieldValues is null)
+            {
                 return GraphResponseHelper.FormatError("Invalid JSON in 'fields' parameter. Expected a JSON object, e.g. '{\"Status\": \"Done\"}'.");
+            }
 
-            var fieldValueSet = new FieldValueSet { AdditionalData = fieldValues };
+            FieldValueSet fieldValueSet = new() { AdditionalData = fieldValues };
 
-            var updated = await graphClient.Sites[siteId].Lists[listId].Items[itemId].Fields.PatchAsync(fieldValueSet).ConfigureAwait(false);
+            FieldValueSet? updated = await graphClient.Sites[siteId].Lists[listId].Items[itemId].Fields.PatchAsync(fieldValueSet).ConfigureAwait(false);
             return GraphResponseHelper.FormatResponse(updated);
         }
         catch (ODataError ex)
@@ -123,6 +142,7 @@ public class SharePointListTools(GraphServiceClient graphClient)
         }
     }
 
+    /// <inheritdoc />
     [McpServerTool(Name = "delete-list-item"),
      Description("Delete an item from a SharePoint list. "
         + "IMPORTANT: Always confirm with the user before calling this tool.")]
@@ -146,12 +166,14 @@ public class SharePointListTools(GraphServiceClient graphClient)
     {
         try
         {
-            var doc = JsonDocument.Parse(json);
+            JsonDocument doc = JsonDocument.Parse(json);
             if (doc.RootElement.ValueKind != JsonValueKind.Object)
+            {
                 return null;
+            }
 
-            var dict = new Dictionary<string, object>();
-            foreach (var prop in doc.RootElement.EnumerateObject())
+            Dictionary<string, object> dict = [];
+            foreach (JsonProperty prop in doc.RootElement.EnumerateObject())
             {
                 dict[prop.Name] = prop.Value.ValueKind switch
                 {
@@ -160,9 +182,13 @@ public class SharePointListTools(GraphServiceClient graphClient)
                     JsonValueKind.True => true,
                     JsonValueKind.False => false,
                     JsonValueKind.Null => null!,
+                    JsonValueKind.Undefined => prop.Value.GetRawText(),
+                    JsonValueKind.Object => prop.Value.GetRawText(),
+                    JsonValueKind.Array => prop.Value.GetRawText(),
                     _ => prop.Value.GetRawText()
                 };
             }
+
             return dict;
         }
         catch (JsonException)

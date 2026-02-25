@@ -19,6 +19,9 @@ public static class TokenCacheHelper
 
     private static readonly SemaphoreSlim SyncLock = new(1, 1);
 
+    /// <summary>
+    /// Registers before/after access callbacks on the MSAL token cache for persistence.
+    /// </summary>
     public static void RegisterCache(IPublicClientApplication app)
     {
         ArgumentNullException.ThrowIfNull(app);
@@ -36,7 +39,9 @@ public static class TokenCacheHelper
         try
         {
             if (File.Exists(CacheFilePath))
+            {
                 File.Delete(CacheFilePath);
+            }
         }
         catch (IOException)
         {
@@ -55,14 +60,20 @@ public static class TokenCacheHelper
 
         try
         {
-            var data = await File.ReadAllBytesAsync(CacheFilePath).ConfigureAwait(false);
+            byte[] data = await File.ReadAllBytesAsync(CacheFilePath).ConfigureAwait(false);
             args.TokenCache.DeserializeMsalV3(data);
         }
         catch (IOException)
         {
             // Corrupt or locked cache file — delete and continue with empty cache
-            try { File.Delete(CacheFilePath); }
-            catch (IOException) { /* best effort */ }
+            try
+            {
+                File.Delete(CacheFilePath);
+            }
+            catch (IOException)
+            {
+                // best effort
+            }
         }
     }
 
@@ -75,12 +86,12 @@ public static class TokenCacheHelper
                 return;
             }
 
-            var data = args.TokenCache.SerializeMsalV3();
+            byte[] data = args.TokenCache.SerializeMsalV3();
 
-            var directory = Path.GetDirectoryName(CacheFilePath);
+            string? directory = Path.GetDirectoryName(CacheFilePath);
             if (directory is not null && !Directory.Exists(directory))
             {
-                Directory.CreateDirectory(directory);
+                _ = Directory.CreateDirectory(directory);
             }
 
             await File.WriteAllBytesAsync(CacheFilePath, data).ConfigureAwait(false);
@@ -94,7 +105,7 @@ public static class TokenCacheHelper
         }
         finally
         {
-            SyncLock.Release();
+            _ = SyncLock.Release();
         }
     }
 }

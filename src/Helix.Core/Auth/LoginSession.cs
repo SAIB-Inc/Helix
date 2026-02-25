@@ -10,11 +10,29 @@ namespace Helix.Core.Auth;
 public static class LoginSession
 {
     private static readonly Lock SyncLock = new();
-    private static Task<AuthenticationResult>? s_pendingAuth;
 
+#pragma warning disable IDE0032 // Auto-property cannot be used with lock synchronization
+    private static Task<AuthenticationResult>? s_pendingAuth;
+#pragma warning restore IDE0032
+
+    /// <summary>
+    /// Gets or sets the in-flight device-code authentication task.
+    /// </summary>
     public static Task<AuthenticationResult>? PendingAuth
     {
-        get { lock (SyncLock) return s_pendingAuth; }
-        set { lock (SyncLock) s_pendingAuth = value; }
+        get
+        {
+            lock (SyncLock)
+            {
+                return s_pendingAuth;
+            }
+        }
+        set
+        {
+            lock (SyncLock)
+            {
+                s_pendingAuth = value;
+            }
+        }
     }
 }
