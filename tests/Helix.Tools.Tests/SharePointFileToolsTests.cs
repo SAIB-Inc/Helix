@@ -264,7 +264,7 @@ public sealed class SharePointFileToolsTests(IntegrationFixture fixture)
 
         // Create a temp file on disk and upload via filePath
         var tempFile = Path.Combine(Path.GetTempPath(), $"helix-test-{shortId}.txt");
-        await File.WriteAllTextAsync(tempFile, "Hello World from file path!");
+        await File.WriteAllTextAsync(tempFile, "Hello World from file path!", TestContext.Current.CancellationToken);
         try
         {
             var uploadResult = await _tools.UploadDriveItem(
