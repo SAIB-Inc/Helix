@@ -41,6 +41,33 @@ public class CalendarTools(GraphServiceClient graphClient)
     }
 
     /// <inheritdoc />
+    [McpServerTool(Name = "get-calendar-online-meeting-settings", ReadOnly = true),
+     Description("Get online meeting settings for the default calendar, including allowed providers and default provider. "
+        + "Use this to diagnose why Teams links may not be generated.")]
+    public async Task<string> GetCalendarOnlineMeetingSettings()
+    {
+        try
+        {
+            Microsoft.Graph.Models.Calendar? calendar = await graphClient.Me.Calendar.GetAsync(config =>
+            {
+                config.QueryParameters.Select =
+                [
+                    "id",
+                    "name",
+                    "allowedOnlineMeetingProviders",
+                    "defaultOnlineMeetingProvider"
+                ];
+            }).ConfigureAwait(false);
+
+            return GraphResponseHelper.FormatResponse(calendar);
+        }
+        catch (ODataError ex)
+        {
+            return GraphResponseHelper.FormatError(ex);
+        }
+    }
+
+    /// <inheritdoc />
     [McpServerTool(Name = "list-calendar-events", ReadOnly = true),
      Description("List calendar events from the signed-in user's default calendar. "
         + "Supports OData query parameters for filtering and paging. "
@@ -167,6 +194,7 @@ public class CalendarTools(GraphServiceClient graphClient)
         [Description("Location display name, e.g. 'Conference Room A'.")] string? location = null,
         [Description("Comma-separated attendee email addresses.")] string? attendees = null,
         [Description("Whether to create as an online meeting with a join link (default: false).")] object? isOnlineMeeting = null,
+        [Description("Online meeting provider when isOnlineMeeting is true. Supported: teamsForBusiness (default), skypeForBusiness, skypeForConsumer.")] string? onlineMeetingProvider = null,
         [Description("Whether this is an all-day event (default: false).")] object? isAllDay = null)
     {
         try
@@ -203,9 +231,21 @@ public class CalendarTools(GraphServiceClient graphClient)
                     })];
             }
 
-            if (GraphResponseHelper.IsTruthy(isOnlineMeeting))
+            bool createOnlineMeeting = GraphResponseHelper.IsTruthy(isOnlineMeeting);
+            if (createOnlineMeeting)
             {
+                if (!TryParseOnlineMeetingProvider(onlineMeetingProvider, out OnlineMeetingProviderType? provider))
+                {
+                    return GraphResponseHelper.FormatError(
+                        "Invalid onlineMeetingProvider. Supported values: teamsForBusiness, skypeForBusiness, skypeForConsumer.");
+                }
+
                 calendarEvent.IsOnlineMeeting = true;
+                calendarEvent.OnlineMeetingProvider = provider ?? OnlineMeetingProviderType.TeamsForBusiness;
+            }
+            else if (!string.IsNullOrWhiteSpace(onlineMeetingProvider))
+            {
+                return GraphResponseHelper.FormatError("onlineMeetingProvider requires isOnlineMeeting=true.");
             }
 
             if (GraphResponseHelper.IsTruthy(isAllDay))
@@ -214,6 +254,30 @@ public class CalendarTools(GraphServiceClient graphClient)
             }
 
             Event? created = await graphClient.Me.Events.PostAsync(calendarEvent).ConfigureAwait(false);
+
+            // Refresh after creation so callers can receive onlineMeeting fields when Graph has populated them.
+            if (createOnlineMeeting && created?.Id is not null)
+            {
+                created = await graphClient.Me.Events[created.Id].GetAsync(config =>
+                {
+                    config.QueryParameters.Select =
+                    [
+                        "id",
+                        "subject",
+                        "start",
+                        "end",
+                        "location",
+                        "organizer",
+                        "isAllDay",
+                        "isCancelled",
+                        "isOnlineMeeting",
+                        "onlineMeetingProvider",
+                        "onlineMeeting",
+                        "responseStatus"
+                    ];
+                }).ConfigureAwait(false);
+            }
+
             return GraphResponseHelper.FormatResponse(created);
         }
         catch (ODataError ex)
@@ -237,6 +301,7 @@ public class CalendarTools(GraphServiceClient graphClient)
         [Description("Body content type: text or html.")] string? bodyContentType = null,
         [Description("Updated location display name.")] string? location = null,
         [Description("Whether this is an online meeting (true or false).")] object? isOnlineMeeting = null,
+        [Description("Online meeting provider when enabling online meetings. Supported: teamsForBusiness (default), skypeForBusiness, skypeForConsumer.")] string? onlineMeetingProvider = null,
         [Description("Whether this is an all-day event (true or false).")] object? isAllDay = null)
     {
         try
@@ -274,7 +339,34 @@ public class CalendarTools(GraphServiceClient graphClient)
 
             if (isOnlineMeeting is not null)
             {
-                calendarEvent.IsOnlineMeeting = GraphResponseHelper.IsTruthy(isOnlineMeeting);
+                bool enableOnlineMeeting = GraphResponseHelper.IsTruthy(isOnlineMeeting);
+                calendarEvent.IsOnlineMeeting = enableOnlineMeeting;
+                if (enableOnlineMeeting)
+                {
+                    if (!TryParseOnlineMeetingProvider(onlineMeetingProvider, out OnlineMeetingProviderType? provider))
+                    {
+                        return GraphResponseHelper.FormatError(
+                            "Invalid onlineMeetingProvider. Supported values: teamsForBusiness, skypeForBusiness, skypeForConsumer.");
+                    }
+
+                    calendarEvent.OnlineMeetingProvider = provider ?? OnlineMeetingProviderType.TeamsForBusiness;
+                }
+                else if (!string.IsNullOrWhiteSpace(onlineMeetingProvider))
+                {
+                    return GraphResponseHelper.FormatError("onlineMeetingProvider requires isOnlineMeeting=true.");
+                }
+            }
+            else if (!string.IsNullOrWhiteSpace(onlineMeetingProvider))
+            {
+                if (!TryParseOnlineMeetingProvider(onlineMeetingProvider, out OnlineMeetingProviderType? provider))
+                {
+                    return GraphResponseHelper.FormatError(
+                        "Invalid onlineMeetingProvider. Supported values: teamsForBusiness, skypeForBusiness, skypeForConsumer.");
+                }
+
+                // Provider-only updates imply enabling online meeting.
+                calendarEvent.IsOnlineMeeting = true;
+                calendarEvent.OnlineMeetingProvider = provider ?? OnlineMeetingProviderType.TeamsForBusiness;
             }
 
             if (isAllDay is not null)
@@ -283,6 +375,31 @@ public class CalendarTools(GraphServiceClient graphClient)
             }
 
             Event? updated = await graphClient.Me.Events[eventId].PatchAsync(calendarEvent).ConfigureAwait(false);
+
+            bool requestedOnlineMeeting = GraphResponseHelper.IsTruthy(isOnlineMeeting)
+                || !string.IsNullOrWhiteSpace(onlineMeetingProvider);
+            if (requestedOnlineMeeting && updated?.Id is not null)
+            {
+                updated = await graphClient.Me.Events[updated.Id].GetAsync(config =>
+                {
+                    config.QueryParameters.Select =
+                    [
+                        "id",
+                        "subject",
+                        "start",
+                        "end",
+                        "location",
+                        "organizer",
+                        "isAllDay",
+                        "isCancelled",
+                        "isOnlineMeeting",
+                        "onlineMeetingProvider",
+                        "onlineMeeting",
+                        "responseStatus"
+                    ];
+                }).ConfigureAwait(false);
+            }
+
             return GraphResponseHelper.FormatResponse(updated);
         }
         catch (ODataError ex)
@@ -360,5 +477,27 @@ public class CalendarTools(GraphServiceClient graphClient)
         {
             return GraphResponseHelper.FormatError(ex);
         }
+    }
+
+    /// <summary>
+    /// Parses supported online meeting provider values.
+    /// </summary>
+    private static bool TryParseOnlineMeetingProvider(string? value, out OnlineMeetingProviderType? provider)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            provider = null;
+            return true;
+        }
+
+        provider = value.Trim().ToUpperInvariant() switch
+        {
+            "TEAMSFORBUSINESS" or "TEAMS" => OnlineMeetingProviderType.TeamsForBusiness,
+            "SKYPEFORBUSINESS" => OnlineMeetingProviderType.SkypeForBusiness,
+            "SKYPEFORCONSUMER" => OnlineMeetingProviderType.SkypeForConsumer,
+            _ => null
+        };
+
+        return provider is not null;
     }
 }
