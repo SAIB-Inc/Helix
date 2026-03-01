@@ -137,6 +137,7 @@ Add to your `claude_desktop_config.json`:
 | Tool | Description |
 |------|-------------|
 | `list-calendars` | List all calendars |
+| `get-calendar-online-meeting-settings` | Get allowed/default online meeting providers for diagnostics |
 | `list-calendar-events` | List events with filtering and paging |
 | `get-calendar-event` | Get a full event by ID |
 | `list-calendar-view` | List events in a date/time range (expands recurring events) |

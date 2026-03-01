@@ -20,6 +20,17 @@ public sealed class CalendarToolsTests(IntegrationFixture fixture)
     }
 
     [Fact]
+    public async Task GetCalendarOnlineMeetingSettingsReturnsCalendar()
+    {
+        string result = await _tools.GetCalendarOnlineMeetingSettings();
+
+        IntegrationFixture.AssertSuccess(result);
+        using JsonDocument doc = JsonDocument.Parse(result);
+        Assert.True(doc.RootElement.TryGetProperty("id", out _));
+        Assert.True(doc.RootElement.TryGetProperty("name", out _));
+    }
+
+    [Fact]
     public async Task ListCalendarEventsReturnsEvents()
     {
         string result = await _tools.ListCalendarEvents(top: 3);
