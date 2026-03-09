@@ -101,6 +101,50 @@ public sealed class MailDraftToolsTests(IntegrationFixture fixture)
     }
 
     [Fact]
+    public async Task UpdateDraftClearCcWithEmptyStringSucceeds()
+    {
+        string? draftId = null;
+        try
+        {
+            // Create draft with CC
+            string createResult = await _draftTools.CreateDraftMessage(
+                subject: "Helix Draft Test - Clear CC",
+                body: "CC clear test",
+                toRecipients: "clark@saib.dev",
+                ccRecipients: "clark@saib.dev");
+
+            IntegrationFixture.AssertSuccess(createResult);
+            using JsonDocument createDoc = JsonDocument.Parse(createResult);
+            draftId = createDoc.RootElement.GetProperty("id").GetString()!;
+
+            // Verify CC is set
+            Assert.True(createDoc.RootElement.TryGetProperty("ccRecipients", out JsonElement ccBefore));
+            Assert.True(ccBefore.GetArrayLength() > 0);
+
+            // Clear CC by passing empty string
+            string updateResult = await _draftTools.UpdateDraftMessage(
+                messageId: draftId,
+                ccRecipients: "");
+
+            IntegrationFixture.AssertSuccess(updateResult);
+            using JsonDocument updateDoc = JsonDocument.Parse(updateResult);
+
+            // Verify CC is now empty
+            if (updateDoc.RootElement.TryGetProperty("ccRecipients", out JsonElement ccAfter))
+            {
+                Assert.Equal(0, ccAfter.GetArrayLength());
+            }
+        }
+        finally
+        {
+            if (draftId is not null)
+            {
+                _ = await _mailTools.DeleteMailMessage(draftId);
+            }
+        }
+    }
+
+    [Fact]
     public async Task CreateReplyDraftReturnsDraftWithId()
     {
         string? receivedId = null;

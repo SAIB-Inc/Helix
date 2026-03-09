@@ -174,9 +174,9 @@ public class MailDraftTools(GraphServiceClient graphClient)
         [Description("Updated email subject line.")] string? subject = null,
         [Description("Updated email body content (plain text or HTML depending on bodyContentType).")] string? body = null,
         [Description("Body content type: text or html.")] string? bodyContentType = null,
-        [Description("Updated comma-separated 'To' recipient email addresses. Replaces all existing To recipients.")] string? toRecipients = null,
-        [Description("Updated comma-separated 'CC' recipient email addresses. Replaces all existing CC recipients.")] string? ccRecipients = null,
-        [Description("Updated comma-separated 'BCC' recipient email addresses. Replaces all existing BCC recipients.")] string? bccRecipients = null,
+        [Description("Updated comma-separated 'To' recipient email addresses. Replaces all existing To recipients. Pass empty string to clear.")] string? toRecipients = null,
+        [Description("Updated comma-separated 'CC' recipient email addresses. Replaces all existing CC recipients. Pass empty string to clear.")] string? ccRecipients = null,
+        [Description("Updated comma-separated 'BCC' recipient email addresses. Replaces all existing BCC recipients. Pass empty string to clear.")] string? bccRecipients = null,
         [Description("Message importance: low, normal, or high.")] string? importance = null)
     {
         try
@@ -197,17 +197,17 @@ public class MailDraftTools(GraphServiceClient graphClient)
                 };
             }
 
-            if (!string.IsNullOrWhiteSpace(toRecipients))
+            if (toRecipients is not null)
             {
                 message.ToRecipients = MailTools.ParseRecipients(toRecipients);
             }
 
-            if (!string.IsNullOrWhiteSpace(ccRecipients))
+            if (ccRecipients is not null)
             {
                 message.CcRecipients = MailTools.ParseRecipients(ccRecipients);
             }
 
-            if (!string.IsNullOrWhiteSpace(bccRecipients))
+            if (bccRecipients is not null)
             {
                 message.BccRecipients = MailTools.ParseRecipients(bccRecipients);
             }
